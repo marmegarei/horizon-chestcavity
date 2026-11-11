@@ -5,7 +5,7 @@ Astro Adds content) to [Horizon](https://github.com/horizon-rust/horizon), Minec
 Every player and mob has organs in their chest. Open it with the Chest Opener, swap organs, and live
 with the consequences.
 
-Status: version 0.8.2, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
+Status: version 0.9.0, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
 original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) (in Portuguese).
 
 ## What works
@@ -22,6 +22,7 @@ original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) 
   the universal donors in a mob's chest. When you die, the organs that are not yours drop.
 - **Body**: eating (digestion, nutrition), breathing (lungs, gills), defenses, kidneys, heart, light,
   water, End Crystals, blows that launch or poison, wings.
+  Astro Adds' organs that work on other organs run too: regrowth, autophagy, tumors, tumor hunters, sculk infection, panic.
 - **Abilities**: key **V** (utility) and **R** (attacks), or `/cc ability <name>`: iron repair, grazing,
   silk, pyromancy, ghastly, dragon bombs, forceful spit, creeper blast.
 - **Languages**: English and Portuguese (`pt_pt`, `pt_br`), following the game's language: item names, organ

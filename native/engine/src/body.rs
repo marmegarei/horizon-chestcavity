@@ -111,7 +111,7 @@ impl Body {
     }
 
     /// The scores, and what the hooks without a `Host` read, from the cavity.
-    fn rescore(&mut self) {
+    pub(crate) fn rescore(&mut self) {
         self.scores = self.cavity.scores(player_kind());
         self.lungs = Lungs::differing(&self.scores, &self.normal);
         self.resist = Resist::of(&self.scores, &self.normal);

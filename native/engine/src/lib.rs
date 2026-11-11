@@ -5,6 +5,7 @@
 //! the abilities some of them give, set off with a key (`abilities`); what each organ says about itself in its tooltip,
 //! and organs from the mobs a player kills. The rules are in `chestcavity-shared`; the modules here tie them to `Host`.
 mod abilities;
+mod astro;
 mod body;
 mod combat;
 mod death;
@@ -376,6 +377,7 @@ impl Hooks for ChestCavity {
             }
             body.feed(host, p.uuid);
             body.purge(host, p.uuid);
+            body.astro(host, &Player::from(&p), &mut lock(&self.rng));
             body.fly(host, p.uuid, p.game_mode);
             if body.ticks % 20 == 0 {
                 let env = environment::of(host, &p, chestcavity_shared::cavity::get(&body.scores, "crystalsynthesis") + chestcavity_shared::cavity::get(&body.scores, "crystallization") > 0.0);

@@ -194,11 +194,11 @@ static INFO: &[Info] = &[
     i("shrieking", "Shrieking", Said("when you are hit you release a sculk shriek wave", ""), ABILITY, ""),
     i("cluster_explode", "Cluster explosion", Said("when you are hit you explode into cluster bombs", ""), ABILITY, ""),
     // Os órgãos que mexem nos órgãos.
-    i("regrowth", "Organ regrowth", Said("lost organs grow back", ""), ABILITY, ""),
-    i("autophagy", "Autophagy", Said("you consume your own organs to feed yourself", ""), ABILITY, ""),
-    i("tumor_autophagy", "Tumor autophagy", Said("you consume tumors to feed yourself", ""), ABILITY, ""),
-    i("tumor_hunting", "Tumor hunting", Said("you seek out and consume tumors", ""), ABILITY, ""),
-    i("sculk_infection", "Sculk infection", Said("you infect organs with sculk", ""), ABILITY, ""),
+    i("regrowth", "Organ regrowth", Said("lost organs grow back", ""), LIVE | ABILITY, ""),
+    i("autophagy", "Autophagy", Said("you consume your own organs to feed yourself", ""), LIVE | ABILITY, ""),
+    i("tumor_autophagy", "Tumor autophagy", Said("you consume tumors to feed yourself", ""), LIVE | ABILITY, ""),
+    i("tumor_hunting", "Tumor hunting", Said("you seek out and consume tumors", ""), LIVE | ABILITY, ""),
+    i("sculk_infection", "Sculk infection", Said("you infect organs with sculk", ""), LIVE | ABILITY, ""),
     // O que custa.
     i("buff_purging", "Buff purging", Said("beneficial effects last less", ""), LIVE | BAD, ""),
     i("hydroallergenic", "Hydroallergy", Said("you take damage touching water or rain (much more when submerged)", ""), LIVE | BAD, ""),

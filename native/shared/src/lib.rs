@@ -4,6 +4,7 @@
 //! and bad at in words (`describe`), the organs a dead mob drops (`drops`), and what a body's lungs (`breath`),
 //! stomach (`food`) and bones (`damage`) do, where a random teleport lands (`teleport`), and the abilities a key sets off (`abilities`). The `engine` crate ties them to Horizon's hooks.
 pub mod abilities;
+pub mod astro;
 pub mod breath;
 pub mod cavity;
 pub mod config;

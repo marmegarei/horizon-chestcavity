@@ -1,4 +1,4 @@
-# Chest Cavity para o Horizon: o que falta (versão 0.8.2)
+# Chest Cavity para o Horizon: o que falta (versão 0.9.0)
 
 Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest Cavity Beyond e o Astro Adds, lidos em `vendor/`. Nada daqui foi ainda testado dentro do jogo: o que está em "Feito" compila, passa os testes e usa hooks que a documentação do Horizon descreve, mas só o jogo diz se se comporta como deve.
 
@@ -13,6 +13,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - **Configuração** (`config/chestcavity.json`, criado ao abrir o mundo): `organ_rejection`, `rejection_rate`, `rejection_damage`, `keep_chest_cavity`, `opener_absolute_health`, `opener_fractional_health`, `universal_donor_rate`, `looting_boost`, `cooldown_scale`.
 - **Comer**: digestão, nutrição, carnívoro/herbívoro, comida podre, resistência (cansaço) e metabolismo mais rápido. Náusea e fome com estômago ou intestinos maus. Intestino de ferro (comida sem efeitos maus) e rotgut (a comida podre deixa de dar Fome).
 - **Poções**: desintoxicação (efeitos maus duram mais ou menos), purga de bónus e ossos secos contra o Wither.
+- **Astro, órgãos que mexem em órgãos**: *regrowth* a cada 400 ticks (enche as ranhuras vazias com o órgão do tipo ou, uma vez em quatro, um tumor; custa fome), autofagia e autofagia tumoral a cada 450 (come comida do peito: alimenta quem tem fome e cura 1 de vida por unidade a quem está cheio; a pilha que acaba deixa um tumor), caça-tumores a cada 250 e infeção sculk a cada 500. Só nos jogadores.
 - **Pânico** (Astro): ao levar dano o corpo ganha Velocidade (a força do efeito do original, +60 % por nível) durante o tempo do original, e só volta a acontecer depois de acabar.
 - **Respirar**: pulmões, capacidade pulmonar e guelras, com as fórmulas do original.
 - **Defesa**: ossos, fogo, impacto, salto (queda), frio e fogo do Beyond, esquiva de flechas (teleporte).
@@ -24,7 +25,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - **Drops**: só órgãos verdadeiros (já não saem terra, paus nem pólvora).
 - **Tooltip** de cada órgão com o que melhora, o que piora, as consequências e as habilidades; separador criativo com tudo.
 
-60 dos 74 scores de órgãos têm efeito real (no 0.7.0 eram 50). 249 dos 254 órgãos têm pelo menos um efeito real; 232 têm todos.
+65 dos 74 scores de órgãos têm efeito real (no 0.7.0 eram 50). 249 dos 254 órgãos têm pelo menos um efeito real; 238 têm todos.
 
 ## Falta
 
@@ -34,7 +35,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - Fornalha interior (`furnace_powered`) e o efeito Furnace Power; os itens internos `cud` e `furnace_power`.
 - Exalar (`buoyant`), flutuação (`buoyant`, `neutral_water_buoyant`).
 - Teclas próprias por habilidade (o original tem 12, sem tecla por omissão) e teclas configuráveis: o port já lê `key.chestcavity.<habilidade>` de `horizon-mods.txt`, mas V e R continuam a ser as únicas com tecla por omissão.
-- Disparar um projétil de cada vez, de 5 em 5 ticks (aqui saem todos juntos) e o recuo ao disparar (o Horizon não empurra jogadores).
+- Disparar um projétil de cada vez, de 6 em 6 ticks (aqui saem todos juntos) e o recuo ao disparar (o Horizon não empurra jogadores).
 - Cooldowns como efeitos de poção visíveis: aqui são temporizadores do mod e perdem-se ao sair do jogo.
 - Ruminar com o efeito Ruminating (aqui a erva é comida de uma vez); `eat_the_rich` (Astro: comer o bloco).
 - Seda: lançar o fio ao chão (aqui vai para o inventário); seda ao ordenhar a vaca e ao tosquiar a ovelha.
@@ -68,7 +69,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - Órgãos nos baús de estruturas (pirâmide do deserto).
 
 ### Astro Adds
-- Regrowth, autofagia, caça-tumores, infeção sculk e tumores (precisam de dados por pilha e temporizadores sobre a cavidade).
+- `eat_the_rich` (comer o bloco); regrowth, autofagia, tumores, caça-tumores e infeção em mobs de peito aberto (só os jogadores têm o relógio); o voo do Astro e as explosões acima.
 
 ### Itens, receitas e configuração
 - Receita da glândula de veneno (glândula + poção) e as glândulas de veneno e de alquimia a guardar efeitos: o Horizon não dá a grelha de crafting a um mod.
@@ -81,6 +82,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 
 ## Aproximações (existem, mas não são iguais)
 
+- Autofagia: a comida do peito dá a fome e a saturação da tabela do Astro, passadas pelo estômago e pelos intestinos, mas não os efeitos do próprio alimento; não bebe o balde de leite (o balde não é órgão aqui).
 - Respiração: não distingue correr nem chuva (o original divide a recuperação por 4 a correr e soma a respiração aquática à chuva).
 - `launching`: não limita a 4 blocos nem desconta a resistência a recuo do alvo.
 - `fire_resistance` e `frost_resistance` do Beyond: abaixo do limite o dano baixa proporcionalmente (o original diz só "atenua").

@@ -71,7 +71,7 @@ impl Body {
     }
 
     /// Exhaustion: what the ability costs a player in food.
-    fn tire(&mut self, host: &mut dyn Host, uuid: u128, amount: f32) {
+    pub(crate) fn tire(&mut self, host: &mut dyn Host, uuid: u128, amount: f32) {
         if let Some((level, saturation, exhaustion)) = self.food {
             let food = (level, saturation, exhaustion + amount);
             host.set_player_status(uuid, None, Some(food), None);
