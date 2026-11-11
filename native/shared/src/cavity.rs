@@ -1,6 +1,6 @@
 //! A chest cavity: 27 slots of organs and the scores they add up to, as
 //! Chest Cavity's `ChestCavityUtil.evaluateChestCavity` counts them.
-use crate::organs::{KINDS, ORGANS, PLAYER};
+use crate::organs::{KINDS, MOBS, ORGANS, PLAYER};
 use std::collections::BTreeMap;
 
 pub const SLOTS: usize = 27;
@@ -34,6 +34,20 @@ pub fn organ(id: &str) -> Option<&'static Organ> {
 
 pub fn player_kind() -> &'static Kind {
     &KINDS[PLAYER]
+}
+
+/// The chest cavity type of a mob (`minecraft:cow`); none for a mob Chest Cavity has no body for.
+pub fn mob_kind(mob: &str) -> Option<&'static Kind> {
+    MOBS.iter().find(|(m, _)| *m == mob).map(|&(_, k)| &KINDS[k])
+}
+
+/// "Cave Spider" for `minecraft:cave_spider`.
+pub fn mob_name(mob: &str) -> String {
+    let path = mob.rsplit(':').next().unwrap_or(mob);
+    path.split('_')
+        .map(|w| w.chars().next().map_or_else(String::new, |c| c.to_uppercase().chain(w.chars().skip(1)).collect()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,4 +111,20 @@ impl Cavity {
 /// A score, 0 when absent.
 pub fn get(scores: &Scores, key: &str) -> f32 {
     scores.get(key).copied().unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mobs_have_their_own_bodies() {
+        assert_eq!(mob_name("minecraft:cave_spider"), "Cave Spider");
+        assert!(mob_kind("minecraft:zombie").is_some_and(|k| !k.slots.is_empty()));
+        assert!(mob_kind("minecraft:villager_of_nowhere").is_none());
+        // Every kind's own cavity fits its 27 slots.
+        for (_, k) in MOBS {
+            assert!(KINDS[*k].slots.iter().all(|&(pos, ..)| (pos as usize) < SLOTS));
+        }
+    }
 }

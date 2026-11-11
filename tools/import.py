@@ -1,5 +1,5 @@
 """Imports Chest Cavity, Chest Cavity Beyond and Astro Adds from vendor/ into
-assets/, data/ and src/organs.rs. Re-runnable: it rewrites everything it owns.
+assets/, data/ and native/shared/src/organs.rs. Re-runnable: it rewrites everything it owns.
 
     python tools/import.py
 """
@@ -440,6 +440,17 @@ def write_items():
     dump(OUT_ASSETS / "lang/en_us.json", lang)
 
 
+def write_creative_tab():
+    """One creative tab with everything of the mod: its tools first, then the organs by name."""
+    organ_ids = {i for i in organs}
+    tools = sorted(n for n in items if f"{NS}:{n}" not in organ_ids and n != "chest_opener")
+    organ_names = sorted((n for n in items if f"{NS}:{n}" in organ_ids), key=lambda n: (items[n]["name"], n))
+    ordered = ["chest_opener"] + tools + organ_names
+    dump(OUT_DATA / NS / "horizon/creative_tab/chestcavity.json",
+         {"title": "Chest Cavity", "icon": f"{NS}:chest_opener", "items": [f"{NS}:{n}" for n in ordered]})
+    return len(ordered)
+
+
 def rs_str(s):
     return json.dumps(s)
 
@@ -485,6 +496,7 @@ def main():
     add_kinds_beyond()
     add_mobs()
     write_items()
+    n_tab = write_creative_tab()
     shutil.rmtree(OUT_DATA / NS / "recipe", ignore_errors=True)
     shutil.rmtree(OUT_DATA / NS / "tags", ignore_errors=True)
     n_recipes = add_recipes()
@@ -494,7 +506,7 @@ def main():
     for it in items.values():
         by_source[it["source"]] = by_source.get(it["source"], 0) + 1
     print(f"items {len(items)} {by_source}, organs {len(organs)}, kinds {len(kinds)}, mobs {len(mobs)}, "
-          f"recipes {n_recipes} (skipped {len(recipes_skipped)}), tags {n_tags}")
+          f"recipes {n_recipes} (skipped {len(recipes_skipped)}), tags {n_tags}, creative tab {n_tab}")
     if recipes_skipped:
         print("skipped recipes:", ", ".join(recipes_skipped))
     for w in warnings:

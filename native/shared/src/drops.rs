@@ -1,7 +1,6 @@
 //! Organs from the mobs a player kills: `GeneratedChestCavityType.generateLootDrops`
 //! and `drawOrgansFromPile`. The engine calls `for_mob` from the loot hook.
-use crate::cavity::{Kind, organ};
-use crate::organs::{KINDS, MOBS};
+use crate::cavity::{Kind, mob_kind, organ};
 
 /// Chest Cavity's base chance before the type's `dropRateMultiplier`.
 const DROP_CHANCE: f32 = 0.1;
@@ -49,12 +48,13 @@ pub fn roll(kind: &Kind, rng: &mut Rng) -> Vec<(&'static str, u32)> {
 
 /// The organs a dead `mob` (`minecraft:zombie`) drops; none for a mob Chest Cavity has no body for.
 pub fn for_mob(mob: &str, rng: &mut Rng) -> Vec<(&'static str, u32)> {
-    MOBS.iter().find(|(m, _)| *m == mob).map_or_else(Vec::new, |&(_, kind)| roll(&KINDS[kind], rng))
+    mob_kind(mob).map_or_else(Vec::new, |kind| roll(kind, rng))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::organs::{KINDS, MOBS};
 
     #[test]
     fn mobs_drop_their_own_organs() {

@@ -1,73 +1,9 @@
 use super::*;
+use crate::fake::Fake;
+use crate::screen::{EMPTY_SLOT, inventory_slot, stack};
+use chestcavity_shared::cavity::SLOTS;
 
 const ME: u128 = 7;
-
-/// The game as far as a body asks of it: a player's data, attributes, inventory, commands and effects.
-struct Fake {
-    data: Option<Tag>,
-    bases: Vec<(String, f64)>,
-    inventory: Vec<Option<ItemStack>>,
-    commands: Vec<String>,
-    effects: Vec<NativeEffect>,
-    menu: Option<Vec<Option<ItemStack>>>,
-}
-
-impl Fake {
-    fn new() -> Self {
-        Fake { data: None, bases: Vec::new(), inventory: vec![None; 36], commands: Vec::new(), effects: Vec::new(), menu: None }
-    }
-    fn base(&self, attribute: &str) -> f64 {
-        self.bases.iter().rev().find(|(a, _)| a == attribute).map(|&(_, b)| b).expect(attribute)
-    }
-}
-
-impl Host for Fake {
-    fn player_persistent_data(&self, _: u128) -> Option<Tag> {
-        self.data.clone()
-    }
-    fn set_player_persistent_data(&mut self, _: u128, data: Tag) -> bool {
-        self.data = Some(data);
-        true
-    }
-    fn set_attribute_base(&mut self, _: u128, attribute: &str, base: f64) -> bool {
-        self.bases.push((attribute.to_string(), base));
-        true
-    }
-    fn give_stack(&mut self, _: u128, stack: ItemStack) -> Option<ItemStack> {
-        match self.inventory.iter_mut().find(|s| s.is_none()) {
-            Some(slot) => {
-                *slot = Some(stack);
-                None
-            }
-            None => Some(stack),
-        }
-    }
-    fn take_stacks(&mut self, _: u128, slots: &[(usize, ItemStack)]) -> Result<Vec<ItemStack>, String> {
-        if slots.iter().any(|(i, s)| self.inventory[*i].as_ref() != Some(s)) {
-            return Err("that stack changed".into());
-        }
-        Ok(slots.iter().map(|(i, _)| self.inventory[*i].take().unwrap()).collect())
-    }
-    fn player_stacks(&self, _: u128) -> Option<Vec<Option<ItemStack>>> {
-        Some(self.inventory.clone())
-    }
-    fn open_menu(&mut self, _: u128, rows: u8, _: Text, items: Vec<Option<ItemStack>>) -> Option<i32> {
-        assert_eq!((rows, items.len()), (3, SLOTS));
-        self.menu = Some(items);
-        Some(5)
-    }
-    fn set_menu_items(&mut self, _: u128, items: Vec<Option<ItemStack>>) {
-        self.menu = Some(items);
-    }
-    fn add_effect(&mut self, _: u128, effect: &NativeEffect) -> bool {
-        self.effects.push(effect.clone());
-        true
-    }
-    fn run_command(&mut self, line: &str) -> bool {
-        self.commands.push(line.to_string());
-        true
-    }
-}
 
 fn heart_slot(body: &Body) -> usize {
     body.cavity.slots.iter().position(|s| s.as_ref().is_some_and(|s| s.id == "chestcavity:heart")).expect("a heart")

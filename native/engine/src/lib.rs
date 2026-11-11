@@ -3,12 +3,17 @@
 //! Chest Opener and swapped from a chest screen, what having (or missing) them does, and organs from
 //! the mobs the player kills. The rules are in `chestcavity-shared`; `body` ties them to `Host`.
 mod body;
+#[cfg(test)]
+mod fake;
+mod mob;
+mod screen;
 
-use body::{Body, stack};
+use body::Body;
 use chestcavity_shared::cavity::{SLOTS, get};
+use screen::stack;
 use chestcavity_shared::drops::{self, Rng};
 use horizon_client::mod_api::{
-    Flow, Hooks, Host, LootDropsEvent, MenuClickedEvent, MenuClosedEvent, NativeCommand, PerformCommandEvent,
+    Flow, Hooks, Host, InteractEntityEvent, LootDropsEvent, MenuClickedEvent, MenuClosedEvent, NativeCommand, PerformCommandEvent,
     PlayerLoggedOutEvent, PlayerRespawnedEvent, PlayerTickEvent, RegisterCommandsEvent, Text, UseItemEvent,
 };
 use std::collections::HashMap;
@@ -19,12 +24,20 @@ const OPENER: &str = "chestcavity:chest_opener";
 
 pub fn hooks() -> Box<dyn Hooks> {
     let seed = SystemTime::now().duration_since(UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
-    Box::new(ChestCavity { bodies: Mutex::new(HashMap::new()), rng: Mutex::new(Rng(seed | 1)) })
+    Box::new(ChestCavity { bodies: Mutex::new(HashMap::new()), mob_screens: Mutex::new(HashMap::new()), rng: Mutex::new(Rng(seed | 1)) })
 }
 
 struct ChestCavity {
     bodies: Mutex<HashMap<u128, Body>>,
+    /// The mob screens players have open.
+    mob_screens: Mutex<HashMap<u128, MobScreen>>,
     rng: Mutex<Rng>,
+}
+
+struct MobScreen {
+    window: i32,
+    entity: u32,
+    mob: String,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -67,7 +80,7 @@ impl Hooks for ChestCavity {
         let (sub, arg) = (words.next(), words.next());
         let lines = self.with(host, uuid, |body, host| match sub {
             None | Some("show") => vec![body.summary()],
-            Some("list") => body.list(),
+            Some("list") => screen::list(&body.cavity),
             Some("open") => vec![if body.open(host, uuid) { "Opened".into() } else { "The screen needs a server player".into() }],
             Some("reset") => {
                 body.reset(host, uuid);
@@ -110,14 +123,38 @@ impl Hooks for ChestCavity {
         Flow::Cancel
     }
 
-    /// A click in the screen: an organ in the cavity comes out, an organ of yours below goes in.
+    /// The Chest Opener on a mob (right click): its chest cavity, to take organs out of or put others in.
+    fn interact_entity(&self, host: &mut dyn Host, event: &mut InteractEntityEvent<'_>) -> Flow {
+        if !event.stack.is_some_and(|s| &*s.item == OPENER) {
+            return Flow::Continue;
+        }
+        let Some(p) = host.acting_player() else { return Flow::Continue };
+        let entity = event.entity as u32;
+        match mob::open(host, p.uuid, entity, event.kind) {
+            Ok(window) => {
+                lock(&self.mob_screens).insert(p.uuid, MobScreen { window, entity, mob: event.kind.to_string() });
+            }
+            Err(line) => Self::say(host, p.uuid, line),
+        }
+        Flow::Cancel
+    }
+
+    /// A click in a screen: an organ in the cavity comes out, an organ of yours below goes in.
     fn menu_clicked(&self, host: &mut dyn Host, event: &mut MenuClickedEvent) {
+        let (uuid, window, slot) = (event.uuid, event.window, event.slot);
         // Plain clicks only: a throw or a drag must not move an organ.
-        if !matches!(event.mode, 0 | 1) || !lock(&self.bodies).get(&event.uuid).is_some_and(|b| b.menu == Some(event.window)) {
+        if !matches!(event.mode, 0 | 1) {
             return;
         }
-        let (uuid, slot) = (event.uuid, event.slot);
-        if let Some(line) = self.with(host, uuid, |body, host| body.click(host, uuid, slot)) {
+        let mob = lock(&self.mob_screens).get(&uuid).filter(|s| s.window == window).map(|s| (s.entity, s.mob.clone()));
+        let line = if let Some((entity, mob)) = mob {
+            mob::click(host, uuid, entity, &mob, slot)
+        } else if lock(&self.bodies).get(&uuid).is_some_and(|b| b.menu == Some(window)) {
+            self.with(host, uuid, |body, host| body.click(host, uuid, slot))
+        } else {
+            return;
+        };
+        if let Some(line) = line {
             host.action_bar(uuid, Text::literal(line));
         }
     }
@@ -125,6 +162,10 @@ impl Hooks for ChestCavity {
     fn menu_closed(&self, _host: &mut dyn Host, event: &mut MenuClosedEvent) {
         if let Some(body) = lock(&self.bodies).get_mut(&event.uuid).filter(|b| b.menu == Some(event.window)) {
             body.menu = None;
+        }
+        let mut screens = lock(&self.mob_screens);
+        if screens.get(&event.uuid).is_some_and(|s| s.window == event.window) {
+            screens.remove(&event.uuid);
         }
     }
 
@@ -150,6 +191,7 @@ impl Hooks for ChestCavity {
 
     fn player_logged_out(&self, _host: &mut dyn Host, event: &mut PlayerLoggedOutEvent<'_>) {
         lock(&self.bodies).remove(&event.player);
+        lock(&self.mob_screens).remove(&event.player);
     }
 
     /// Organs from the mobs a player kills.
