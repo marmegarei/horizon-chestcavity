@@ -2,6 +2,9 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "#chestcavity:salvageable_toxic_meat",
+    "#chestcavity:salvageable_toxic_meat",
+    "#chestcavity:salvageable_toxic_meat",
     "#chestcavity:salvageable_toxic_meat"
   ],
   "result": {

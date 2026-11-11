@@ -7,6 +7,7 @@
 mod abilities;
 mod body;
 mod combat;
+mod death;
 mod environment;
 #[cfg(test)]
 mod fake;
@@ -14,6 +15,7 @@ mod mob;
 mod mobbody;
 mod nutrition;
 mod opening;
+mod purge;
 mod screen;
 mod teleport;
 #[cfg(test)]
@@ -23,19 +25,19 @@ mod trace;
 
 use body::Body;
 use chestcavity_shared::cavity::{SLOTS, organ};
+use chestcavity_shared::config::Config;
 use chestcavity_shared::describe::{IDLE, Tone, describe};
-use chestcavity_shared::drops::{self, Rng};
+use chestcavity_shared::drops::Rng;
 use chestcavity_shared::food::Meal;
 use horizon_client::mod_api::{
-    AttackEntityEvent, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
+    AttackEntityEvent, BreakSpeedEvent, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
     LivingIncomingDamageV3Event, LootDropsEvent, MenuClickedEvent, MenuClosedEvent, NativeCommand, NetFromClientEvent,
     PerformCommandEvent, PlayerLoggedOutEvent, PlayerRespawnedEvent, PlayerTickEvent, RegisterCommandsEvent, ServerTickEvent,
-    ServerTickPhase, Text, TooltipEvent, UseItemEvent, UseItemOnEvent,
+    ServerAboutToStartEvent, ServerTickPhase, Text, TooltipEvent, UseItemEvent, UseItemOnEvent,
 };
 use combat::Hit;
 use mobbody::MobBody;
 use opening::{Ask, Player};
-use screen::stack;
 use texts::{arg_text, msg};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -53,6 +55,8 @@ pub fn hooks() -> Box<dyn Hooks> {
 
 struct ChestCavity {
     bodies: Mutex<HashMap<u128, Body>>,
+    /// The settings (`config/chestcavity.json`), read when the world is about to open.
+    config: Mutex<Config>,
     /// The players' entity ids this session, for the hooks the game tells by id alone.
     entities: Mutex<HashMap<u32, u128>>,
     /// Each player as they were at their last tick (and their game mode): the server tick has no acting player, and
@@ -65,6 +69,8 @@ struct ChestCavity {
     /// The blows to answer and the bodies to send away at the next server tick (see `combat`).
     hits: Mutex<Vec<Hit>>,
     dodges: Mutex<Vec<(u128, f32)>>,
+    /// The bodies that panic at the next server tick: player, Speed level and ticks (see `combat`).
+    panics: Mutex<Vec<(u128, u8, i32)>>,
     /// When each player last clicked a mob with the opener, in server ticks.
     mob_clicks: Mutex<HashMap<u128, u64>>,
     ticks: AtomicU64,
@@ -90,12 +96,14 @@ impl ChestCavity {
     fn new(seed: u64) -> Self {
         ChestCavity {
             bodies: Mutex::new(HashMap::new()),
+            config: Mutex::new(Config::default()),
             entities: Mutex::new(HashMap::new()),
             players: Mutex::new(HashMap::new()),
             opens: Mutex::new(HashMap::new()),
             abilities: Mutex::new(Vec::new()),
             hits: Mutex::new(Vec::new()),
             dodges: Mutex::new(Vec::new()),
+            panics: Mutex::new(Vec::new()),
             mob_clicks: Mutex::new(HashMap::new()),
             ticks: AtomicU64::new(0),
             mob_screens: Mutex::new(HashMap::new()),
@@ -114,6 +122,24 @@ impl ChestCavity {
         out
     }
 
+    fn cfg(&self) -> Config {
+        lock(&self.config).clone()
+    }
+
+    /// Reads the settings file, writing it with the defaults when there is none.
+    fn load_config(&self, host: &mut dyn Host) {
+        let Ok(path) = host.config_dir().map(|d| d.join("chestcavity.json")) else { return };
+        let config = match std::fs::read_to_string(&path) {
+            Ok(text) => Config::parse(&text),
+            Err(_) => {
+                let config = Config::default();
+                let _ = std::fs::write(&path, config.render());
+                config
+            }
+        };
+        *lock(&self.config) = config;
+    }
+
     fn say(host: &mut dyn Host, uuid: u128, line: impl Into<Text>) {
         host.tell(uuid, line.into());
     }
@@ -126,9 +152,10 @@ impl ChestCavity {
         }
         let mob = lock(&self.mob_screens).get(&uuid).filter(|s| s.window == window).map(|s| (s.entity, s.mob.clone(), s.dimension.clone()));
         let line = if let Some((entity, mob, dimension)) = mob {
-            let line = mob::click(host, uuid, entity, &mob, slot);
+            let donors = self.cfg().universal_donor_rate;
+            let line = mob::click(host, uuid, entity, &mob, donors, slot);
             // Whatever the click did, the mob lives by the cavity it has now.
-            if let Some(cavity) = mob::load(host, entity, &mob) {
+            if let Some(cavity) = mob::load(host, entity, &mob, donors) {
                 self.track_mob(entity, &mob, &dimension, &cavity);
             }
             line
@@ -144,8 +171,11 @@ impl ChestCavity {
 
     /// The lines an organ adds to its tooltip, coloured: green what it improves, red what it costs, purple its
     /// abilities, gold what happens without it. None for an item that is not an organ.
-    fn tooltip_lines(item: &str) -> Vec<Text> {
-        let Some(organ) = organ(item) else { return Vec::new() };
+    fn tooltip_lines(stack: &ItemStack) -> Vec<Text> {
+        let Some(organ) = organ(&stack.item) else { return Vec::new() };
+        let fit = chestcavity_shared::cavity::is_true_organ(&stack.item).then(|| {
+            if screen::owner_of(stack).is_some() { msg("chestcavity.compat.bound").text().with_color(0xFFAA00) } else { msg("chestcavity.compat.safe").text().with_color(0x55FF55) }
+        });
         describe(organ)
             .into_iter()
             .map(|line| {
@@ -158,6 +188,7 @@ impl ChestCavity {
                 let idle = if line.idle { Text::translate_with_fallback(IDLE.0, IDLE.1, &[]).with_color(0x555555) } else { Text::empty() };
                 arg_text(&line.text).with_color(color).append(idle)
             })
+            .chain(fit)
             .collect()
     }
 
@@ -252,6 +283,10 @@ impl Hooks for ChestCavity {
         Flow::Cancel
     }
 
+    fn server_about_to_start(&self, host: &mut dyn Host, _event: &mut ServerAboutToStartEvent) {
+        self.load_config(host);
+    }
+
     fn server_tick(&self, host: &mut dyn Host, event: &mut ServerTickEvent<'_>) {
         if matches!(event.phase, ServerTickPhase::ServerTickEnd { .. }) {
             let ticks = self.ticks.fetch_add(1, Ordering::Relaxed) + 1;
@@ -262,6 +297,15 @@ impl Hooks for ChestCavity {
         self.open_queued(host);
         self.run_abilities(host);
         self.run_combat(host);
+    }
+
+    /// Digging in water is slower for a body that is weak in it.
+    fn break_speed(&self, host: &dyn Host, event: &mut BreakSpeedEvent) {
+        let Some(p) = host.acting_player() else { return };
+        let factor = lock(&self.bodies).get(&p.uuid).filter(|b| b.in_water).map(|b| chestcavity_shared::effects::weakness_in_water(&b.scores));
+        if let Some(factor) = factor {
+            event.speed *= factor;
+        }
     }
 
     /// A mob that comes back with a cavity a player changed lives by it again.
@@ -284,15 +328,23 @@ impl Hooks for ChestCavity {
         Flow::Continue
     }
 
-    /// The ability keys, on the window's side: V sets off the utility abilities, R the attacks (as in Chest Cavity).
+    /// The ability keys, on the window's side: V sets off the utility abilities, R the attacks (as in Chest Cavity), and
+    /// each ability has a key of its own that starts unbound. The player can choose others in `horizon-mods.txt`
+    /// (`key.chestcavity.utility:key.keyboard.x`).
     fn key(&self, host: &mut dyn Host, event: &mut KeyEvent<'_>) {
-        let which = match event.key {
-            "key.keyboard.v" => "utility",
-            "key.keyboard.r" => "attack",
-            _ => return,
-        };
-        if event.pressed && host.playing() {
-            let _ = host.net_send_to_server(ABILITY_CHANNEL, which.as_bytes());
+        if !event.pressed || !host.playing() {
+            return;
+        }
+        let names = ["utility", "attack"].into_iter().chain(chestcavity_shared::abilities::ABILITIES.iter().map(|a| a.name));
+        for name in names {
+            let default = match name {
+                "utility" => "key.keyboard.v",
+                "attack" => "key.keyboard.r",
+                _ => "",
+            };
+            if host.mod_key("chestcavity", name, default) == event.key {
+                let _ = host.net_send_to_server(ABILITY_CHANNEL, name.as_bytes());
+            }
         }
     }
 
@@ -323,10 +375,11 @@ impl Hooks for ChestCavity {
                 return;
             }
             body.feed(host, p.uuid);
+            body.purge(host, p.uuid);
             body.fly(host, p.uuid, p.game_mode);
             if body.ticks % 20 == 0 {
-                let env = environment::of(host, &p, chestcavity_shared::cavity::get(&body.scores, "crystalsynthesis") > 0.0);
-                body.beat(host, &Player::from(&p), &env, &mut lock(&self.rng));
+                let env = environment::of(host, &p, chestcavity_shared::cavity::get(&body.scores, "crystalsynthesis") + chestcavity_shared::cavity::get(&body.scores, "crystallization") > 0.0);
+                body.beat(host, &Player::from(&p), &env, &mut lock(&self.rng), &self.cfg());
             }
         });
     }
@@ -341,7 +394,7 @@ impl Hooks for ChestCavity {
     /// What bones, fireproof and impact resistant organs take off a hit, and the arrows a body steps away from.
     fn living_incoming_damage_v3(&self, event: &mut LivingIncomingDamageV3Event<'_>) -> Flow {
         let Some(uuid) = event.victim_uuid else { return Flow::Continue };
-        match self.incoming(uuid, event.damage_type, event.amount) {
+        match self.incoming(uuid, event.attacker_uuid, event.damage_type, event.amount) {
             Some(amount) => event.amount = amount,
             None => {
                 event.amount = 0.0;
@@ -366,10 +419,10 @@ impl Hooks for ChestCavity {
         event.consume = (-air).max(0);
     }
 
-    /// A new body, as after a death.
+    /// A new body, as after a death (or the one they had, with the settings that keep the chest cavity).
     fn player_respawned(&self, host: &mut dyn Host, event: &mut PlayerRespawnedEvent<'_>) {
-        let uuid = event.player;
-        self.with(host, uuid, |body, host| body.reset(host, uuid));
+        let (uuid, keep) = (event.player, self.cfg().keep_chest_cavity);
+        self.with(host, uuid, |body, host| body.respawn(host, uuid, keep));
     }
 
     fn player_logged_out(&self, _host: &mut dyn Host, event: &mut PlayerLoggedOutEvent<'_>) {
@@ -380,18 +433,23 @@ impl Hooks for ChestCavity {
         lock(&self.opens).remove(&event.player);
     }
 
-    /// Organs from the mobs a player kills.
-    fn loot_drops(&self, _host: &mut dyn Host, event: &mut LootDropsEvent<'_>) {
+    /// What dies drops: the organs a dead body gives up (a player's with what they carried) and those of the mobs killed.
+    fn loot_drops(&self, host: &mut dyn Host, event: &mut LootDropsEvent<'_>) {
         let ctx = event.context;
-        let (Some((_, mob)), Some(_), false) = (ctx.entity, ctx.player, ctx.used) else { return };
-        for (id, n) in drops::for_mob(mob, &mut lock(&self.rng)) {
-            event.drops.push(stack(id, n));
+        let (Some((entity, kind)), None, false) = (ctx.entity, ctx.block, ctx.used) else { return };
+        // A dying player's inventory is a call of its own, with no loot table.
+        if kind == "minecraft:player" {
+            if let (Some(uuid), true) = (ctx.player, ctx.table.is_empty()) {
+                self.player_dropped(host, uuid, event.drops);
+            }
+            return;
         }
+        self.mob_dropped(host, entity, kind, ctx.player, !ctx.table.is_empty(), event.drops);
     }
 
     /// What an organ is good and bad at, under its name wherever the game shows its tooltip.
     fn tooltip(&self, _host: &dyn Host, event: &mut TooltipEvent<'_>) {
-        for line in Self::tooltip_lines(&event.stack.item) {
+        for line in Self::tooltip_lines(event.stack) {
             event.lines.push((line, u32::MAX));
         }
     }

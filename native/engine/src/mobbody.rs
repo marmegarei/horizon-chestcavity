@@ -4,7 +4,7 @@
 use crate::{ChestCavity, lock, mob};
 use chestcavity_shared::cavity::{Cavity, Kind, Scores, get, mob_kind};
 use chestcavity_shared::effects::{self, Action, Env, Progress};
-use horizon_client::mod_api::Host;
+use horizon_client::mod_api::{Compound, Host, Tag};
 
 /// What a mob has to be made to do.
 #[derive(Debug, PartialEq)]
@@ -13,10 +13,19 @@ pub enum Act {
     Effect { id: &'static str, ticks: u32, amplifier: u32 },
     /// Attribute modifiers: the ones to take off, then the ones to put on (attribute, amount, operation).
     Modifiers { remove: Vec<&'static str>, add: Vec<(&'static str, f64, &'static str)> },
+    /// Data to merge into the mob (a creeper's fuse).
+    Nbt(Compound),
 }
+
+/// A creeper's usual fuse (ticks), and the one it gets when it has lost what makes it explode: so long that it never ends.
+const FUSE: i16 = 30;
+const NO_FUSE: i16 = i16::MAX;
 
 pub struct MobBody {
     pub dimension: String,
+    mob: String,
+    /// Whether its fuse has been made endless (a creeper without its appendix can't explode).
+    fuse_cut: bool,
     scores: Scores,
     normal: Scores,
     progress: Progress,
@@ -31,6 +40,8 @@ impl MobBody {
         let kind: &'static Kind = mob_kind(mob)?;
         Some(MobBody {
             dimension: dimension.to_string(),
+            mob: mob.to_string(),
+            fuse_cut: false,
             scores: cavity.scores(kind),
             normal: Cavity::of(kind).scores(kind),
             progress: Progress::default(),
@@ -49,7 +60,7 @@ impl MobBody {
 
     /// Whether it is as it was born and has nothing left to take back.
     pub fn is_idle(&self) -> bool {
-        !self.dirty && self.applied.is_empty() && self.scores == self.normal
+        !self.dirty && self.applied.is_empty() && !self.fuse_cut && self.scores == self.normal
     }
 
     /// What its organs do to it this second.
@@ -60,6 +71,12 @@ impl MobBody {
             let add = effects::modifiers(&self.scores, &self.normal);
             let remove = std::mem::replace(&mut self.applied, add.iter().map(|m| m.0).collect());
             acts.push(Act::Modifiers { remove, add });
+            // A creeper that has lost its appendix can't explode (`MixinLivingEntity$Creeper`).
+            let cut = self.mob == "minecraft:creeper" && get(&self.normal, "creepy") >= 1.0 && get(&self.scores, "creepy") < 1.0;
+            if cut != self.fuse_cut {
+                self.fuse_cut = cut;
+                acts.push(Act::Nbt([("Fuse".into(), Tag::Short(if cut { NO_FUSE } else { FUSE }))].into_iter().collect()));
+            }
         }
         for action in effects::periodic(&self.scores, &self.normal, seconds, &mut self.progress, &Env::default()) {
             match action {
@@ -121,6 +138,9 @@ impl ChestCavity {
                     }
                     (Act::Effect { id: effect, ticks, amplifier }, Some(uuid)) => {
                         host.run_command(&format!("effect give {uuid} {effect} {} {amplifier} true", (ticks / 20).max(1)));
+                    }
+                    (Act::Nbt(nbt), _) => {
+                        entity.merge_nbt(host, nbt);
                     }
                     (Act::Modifiers { remove, add }, Some(uuid)) => {
                         for attribute in remove {

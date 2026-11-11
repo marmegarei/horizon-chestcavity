@@ -1,12 +1,13 @@
 //! What a body does when it fights. Its blows lift and poison what they hit (`OrganOnHitListeners`, the venom gland), it
-//! steps out of the way of arrows (`attemptArrowDodging`), and the organs that give wings let it fly. The hooks only note
+//! steps out of the way of arrows (`attemptArrowDodging`), runs when hurt (panic), and the organs that give wings let it fly. The hooks only note
 //! what happened; the server tick, where the game lets a mod run commands and move entities, does it.
 use crate::body::Body;
 use crate::opening::Player;
 use crate::teleport;
 use crate::{ChestCavity, lock};
 use chestcavity_shared::cavity::get;
-use horizon_client::mod_api::Host;
+use chestcavity_shared::effects;
+use horizon_client::mod_api::{Host, NativeEffect};
 
 /// `LAUNCHING_POWER`: the upward speed a point of launching gives what it hits.
 const LAUNCHING_POWER: f64 = 0.1;
@@ -46,14 +47,23 @@ impl ChestCavity {
 
     /// What `uuid`'s body does to a hit it takes: the damage left, or none when it dodged (a body the engine has not met
     /// takes it as it comes). A dodged hit sends the body somewhere else at the next server tick.
-    pub(crate) fn incoming(&self, uuid: u128, damage_type: &str, amount: f32) -> Option<f32> {
+    pub(crate) fn incoming(&self, uuid: u128, attacker: Option<u128>, damage_type: &str, amount: f32) -> Option<f32> {
         let mut bodies = lock(&self.bodies);
+        // A body that is weak in water hits less hard there.
+        let amount = attacker.and_then(|a| bodies.get(&a)).filter(|b| b.in_water).map_or(amount, |b| amount * effects::weakness_in_water(&b.scores));
         let Some(body) = bodies.get_mut(&uuid) else { return Some(amount) };
         let resist = body.resist;
         if resist.dodges(damage_type) && body.rests.get("arrow_dodging").is_none_or(|&until| until <= body.ticks) {
             body.rests.insert("arrow_dodging", body.ticks + (DODGE_REST / resist.dodging) as u64);
             lock(&self.dodges).push((uuid, DODGE_DISTANCE / resist.dodging));
             return None;
+        }
+        // Panic (Astro Adds): a burst of speed when a body that has it is hurt, and not again until it is over.
+        let panic = get(&body.scores, "panic") - get(&body.normal, "panic");
+        if panic > 0.0 && amount > 0.0 && body.rests.get("panic").is_none_or(|&until| until <= body.ticks) {
+            let (amplifier, ticks) = effects::panic(panic);
+            body.rests.insert("panic", body.ticks + ticks as u64);
+            lock(&self.panics).push((uuid, amplifier, ticks));
         }
         Some(if resist.is_normal() { amount } else { resist.apply(damage_type, amount) })
     }
@@ -73,6 +83,10 @@ impl ChestCavity {
                     host.run_command(&format!("effect give {} minecraft:poison {VENOM_SECONDS} 0", uuid_text(id)));
                 }
             }
+        }
+        for (uuid, amplifier, ticks) in std::mem::take(&mut *lock(&self.panics)) {
+            let effect = NativeEffect { id: "minecraft:speed".into(), amplifier, duration: ticks, ambient: false, particles: true };
+            host.add_effect(uuid, &effect);
         }
         let dodges = std::mem::take(&mut *lock(&self.dodges));
         if dodges.is_empty() {

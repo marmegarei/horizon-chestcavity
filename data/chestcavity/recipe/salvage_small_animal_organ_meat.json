@@ -2,6 +2,7 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "#chestcavity:salvageable_small_animal_organ_meat",
     "#chestcavity:salvageable_small_animal_organ_meat"
   ],
   "result": {

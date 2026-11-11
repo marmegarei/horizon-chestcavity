@@ -86,6 +86,8 @@ pub enum Action {
     Nourish { hunger: i32, saturation: f32, heal: f32 },
     /// Somewhere else at random, at most `range` blocks away.
     Teleport { range: f32 },
+    /// Health, whatever the food bar says.
+    Heal(f32),
 }
 
 /// Where the body is, as far as its organs care.
@@ -97,8 +99,11 @@ pub struct Env {
     pub wet: bool,
     /// Its head is under water.
     pub submerged: bool,
-    /// An End Crystal is within reach of the body.
+    /// Its feet or its head are in water (rain does not count).
+    pub in_water: bool,
+    /// An End Crystal is within reach of the body, and within half that.
     pub crystal: bool,
+    pub crystal_close: bool,
 }
 
 /// What the organs keep count of between beats.
@@ -110,6 +115,22 @@ pub struct Progress {
     pub light: i32,
     /// Ticks until water hurts again.
     pub dry: i32,
+}
+
+/// How much a point of water weakness takes off the damage and the mining of a body in water (`1 / (1 + 0.1 w)`).
+pub fn weakness_in_water(now: &Scores) -> f32 {
+    1.0 / (1.0 + 0.1 * get(now, "water_weakness").max(0.0))
+}
+
+/// Astro Adds' Panic, which a body with `score` points of panic gets when it takes damage: a burst of speed. The effect is
+/// `+60 %` movement speed for each of its levels, `floor(2 log10(score + 1))` of them above the first, for
+/// `100 log10(2 score - 1) + 100` ticks; Horizon's mod effects have no attribute modifiers, so it is Speed of the same
+/// strength (+20 % a level). (Speed amplifier, ticks.)
+pub fn panic(score: f32) -> (u8, i32) {
+    let level = (2.0 * (score + 1.0).log10()).floor().max(0.0) as u8;
+    let long = 2.0 * score - 1.0;
+    let ticks = if long > 0.0 { (100.0 * long.log10()) as i32 } else { 0 } + 100;
+    (3 * (level + 1) - 1, ticks.max(1))
 }
 
 /// `PHOTOSYNTHESIS_FREQUENCY` (50) ticks of 8 leaves in full light win one step.
@@ -154,8 +175,14 @@ pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, progress: &mut Prog
     if crystal > 0.0 && env.crystal {
         out.push(Action::Nourish { hunger: if crystal >= 5.0 { 2 } else { 1 }, saturation: crystal / 5.0, heal: crystal * 2.0 / 5.0 });
     }
+    // Crystallization (Beyond): an End Crystal close by heals the body, and feeds it once a second.
+    let crystallization = get(now, "crystallization");
+    if crystallization > 0.0 && env.crystal_close {
+        out.push(Action::Heal(crystallization * 2.0 / 5.0));
+        out.push(Action::Nourish { hunger: (crystallization / 5.0).max(1.0) as i32, saturation: 0.5, heal: 0.0 });
+    }
     // Water allergy (TickHydroallergenic): a splash hurts a little, a dive a lot, then the body is spared a while.
-    let allergy = get(now, "hydroallergenic");
+    let allergy = get(now, "hydroallergenic") + get(now, "water_allergy");
     progress.dry = (progress.dry - 20).max(0);
     if allergy > 0.0 && progress.dry == 0 && (env.submerged || env.wet) {
         out.push(Action::Damage { amount: if env.submerged { 10.0 } else { 1.0 }, kind: "minecraft:magic" });
@@ -180,6 +207,14 @@ pub fn summary(now: &Scores, normal: &Scores) -> Vec<(&'static str, f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn panic_is_a_burst_of_speed_that_grows_with_the_organs() {
+        assert_eq!(panic(1.0), (2, 100), "one point: Speed III for five seconds");
+        assert_eq!(panic(5.0), (5, 195), "the level and the time grow with the score");
+        assert_eq!(panic(0.25).1, 100, "a little panic still lasts");
+        assert!(panic(0.5).1 >= 1, "and never has a negative time");
+    }
     use crate::cavity::{Cavity, player_kind};
 
     fn without(item: &str) -> Cavity {
@@ -231,6 +266,16 @@ mod tests {
         assert!((base(&bases, "minecraft:knockback_resistance") - 0.6).abs() < 1e-9);
         assert_eq!(base(&attribute_bases(&normal, &normal), "minecraft:gravity"), 0.08);
 
+        // Water weakness: in water the blows and the digging are weaker.
+        let mut weak = normal.clone();
+        weak.insert("water_weakness", 10.0);
+        assert_eq!(weakness_in_water(&weak), 0.5);
+        assert_eq!(weakness_in_water(&normal), 1.0);
+        let mut itchy = normal.clone();
+        itchy.insert("water_allergy", 1.0);
+        let swim = Env { wet: true, in_water: true, ..Env::default() };
+        assert!(periodic(&itchy, &normal, 1, &mut Progress::default(), &swim).iter().any(|a| matches!(a, Action::Damage { kind: "minecraft:magic", .. })));
+
         // A mob's attributes come as modifiers: a heart short is 4 health short, no spine is no moving.
         let mob = modifiers(&no_heart, &normal);
         assert!(mob.contains(&("minecraft:max_health", -4.0, "add_value")), "{mob:?}");
@@ -267,6 +312,12 @@ mod tests {
         crystalline.insert("crystalsynthesis", 2.0);
         assert!(periodic(&crystalline, &normal, 1, &mut Progress::default(), &Env { crystal: true, ..Env::default() }).iter().any(|a| matches!(a, Action::Nourish { .. })));
         assert!(periodic(&crystalline, &normal, 1, &mut Progress::default(), &Env::default()).is_empty());
+
+        let mut crystallized = normal.clone();
+        crystallized.insert("crystallization", 5.0);
+        let near = Env { crystal: true, crystal_close: true, ..Env::default() };
+        assert!(periodic(&crystallized, &normal, 1, &mut Progress::default(), &near).contains(&Action::Heal(2.0)));
+        assert!(periodic(&crystallized, &normal, 1, &mut Progress::default(), &Env { crystal: true, ..Env::default() }).is_empty(), "too far");
 
         let mut afraid = normal.clone();
         afraid.insert("hydrophobia", 1.0);

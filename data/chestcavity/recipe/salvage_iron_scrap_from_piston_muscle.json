@@ -2,6 +2,9 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "chestcavity:piston_muscle",
+    "chestcavity:piston_muscle",
+    "chestcavity:piston_muscle",
     "chestcavity:piston_muscle"
   ],
   "result": {

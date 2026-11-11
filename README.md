@@ -5,16 +5,21 @@ Astro Adds content) to [Horizon](https://github.com/horizon-rust/horizon), Minec
 Every player and mob has organs in their chest. Open it with the Chest Opener, swap organs, and live
 with the consequences.
 
-Status: version 0.7.0, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
+Status: version 0.8.1, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
 original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) (in Portuguese).
 
 ## What works
 
 - **Chest Opener**: right click in the air opens your own chest, on a mob opens its own (each species
-  has its organs). Opening hurts 4, unless the chest is easy to open (doors count as organs). What you take out of a mob
-  changes it: no heart and it bleeds to death, no spine and it cannot move, no lungs and it drowns.
+  has its organs; the mob must be weak, at 20 health or half of its maximum, and wear no chestplate). Opening hurts 4,
+  unless the chest is easy to open (doors count as organs). What you take out of a mob changes it: no heart and it
+  bleeds to death, no spine and it cannot move, no lungs and it drowns.
 - **Organs**: 254 organs and 291 items, tooltips with what each is better and worse at, a creative tab
-  with all of them, mobs drop their organs.
+  with all of them, mobs drop their organs (Looting counts; a cleaver multiplies it by ten and takes the organs apart
+  into meat, bone meal, gunpowder and so on).
+- **Rejection**: an organ fits the body it was born in. In another body it is rejected (damage every 30 seconds
+  for each such organ, with an Organ Rejection effect counting down), unless it came from a loot drop or from one of
+  the universal donors in a mob's chest. When you die, the organs that are not yours drop.
 - **Body**: eating (digestion, nutrition), breathing (lungs, gills), defenses, kidneys, heart, light,
   water, End Crystals, blows that launch or poison, wings.
 - **Abilities**: key **V** (utility) and **R** (attacks), or `/cc ability <name>`: iron repair, grazing,
@@ -23,6 +28,8 @@ original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) 
   descriptions, messages. Other languages show English.
 - Commands: `/cc`, `/cc list`, `/cc take <slot>`, `/cc put`, `/cc ability <name>`; for operators
   `/cc open` and `/cc reset`.
+- Settings in `config/chestcavity.json` (written when a world opens): rejection on or off, its pace and damage,
+  keeping your chest through death, how weak a mob must be, the universal donor rate, the Looting bonus, ability cooldowns.
 
 ## Layout
 

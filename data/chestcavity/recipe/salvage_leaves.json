@@ -2,6 +2,9 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "chestcavity:shifting_leaves",
+    "chestcavity:shifting_leaves",
+    "chestcavity:shifting_leaves",
     "chestcavity:shifting_leaves"
   ],
   "result": {

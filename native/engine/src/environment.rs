@@ -2,8 +2,9 @@
 use chestcavity_shared::effects::Env;
 use horizon_client::mod_api::{Host, NativeServerPlayer};
 
-/// `CRYSTALSYNTHESIS_RANGE`.
+/// `CRYSTALSYNTHESIS_RANGE`, and Beyond's `CRYSTAL_EFFECT_SEARCH_RANGE`.
 const CRYSTAL_RANGE: f64 = 32.0;
+const CRYSTAL_CLOSE: f64 = 16.0;
 
 fn water(block: &str) -> bool {
     block.starts_with("minecraft:water") || block.starts_with("minecraft:bubble_column")
@@ -18,7 +19,18 @@ pub fn of(host: &mut dyn Host, p: &NativeServerPlayer, crystals: bool) -> Env {
     let (block, sky) = host.light(at(1.62));
     let submerged = water(&eyes);
     let rain = host.weather().0 > 0.2 && sky >= 15;
-    let near = |pos: &[f64; 3]| (0..3).map(|i| (pos[i] - p.position[i]).powi(2)).sum::<f64>() <= CRYSTAL_RANGE * CRYSTAL_RANGE;
-    let crystal = crystals && host.level_entities(&p.dimension).iter().any(|(_, kind, pos)| kind == "minecraft:end_crystal" && near(pos));
-    Env { light: block.max(sky), wet: submerged || water(&feet) || rain, submerged, crystal }
+    let distance = |pos: &[f64; 3]| (0..3).map(|i| (pos[i] - p.position[i]).powi(2)).sum::<f64>();
+    let nearest = if crystals {
+        host.level_entities(&p.dimension).iter().filter(|(_, kind, _)| kind == "minecraft:end_crystal").map(|(_, _, pos)| distance(pos)).fold(f64::INFINITY, f64::min)
+    } else {
+        f64::INFINITY
+    };
+    Env {
+        light: block.max(sky),
+        wet: submerged || water(&feet) || rain,
+        submerged,
+        in_water: submerged || water(&feet),
+        crystal: nearest <= CRYSTAL_RANGE * CRYSTAL_RANGE,
+        crystal_close: nearest <= CRYSTAL_CLOSE * CRYSTAL_CLOSE,
+    }
 }

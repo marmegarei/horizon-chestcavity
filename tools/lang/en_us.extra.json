@@ -136,7 +136,7 @@
   "chestcavity.score.withered.name": "Wither resistance",
   "chestcavity.score.withered.up": "the Wither effect lasts less",
   "chestcavity.score.panic.name": "Panic",
-  "chestcavity.score.panic.up": "when you take damage you panic (temporary effect)",
+  "chestcavity.score.panic.up": "when you take damage you panic and run faster for a while",
   "chestcavity.score.resonance.name": "Resonance",
   "chestcavity.score.resonance.up": "when you are hit you release a resonant blast",
   "chestcavity.score.shrieking.name": "Shrieking",
@@ -210,5 +210,10 @@
   "chestcavity.fmt.consequence": "Consequence: %s",
   "chestcavity.fmt.stack": "Full effect with %s in the stack; with fewer, proportional",
   "chestcavity.fmt.idle": " (no effect yet)",
-  "itemGroup.chestcavity.chestcavity": "Chest Cavity"
+  "itemGroup.chestcavity.chestcavity": "Chest Cavity",
+  "chestcavity.msg.obstructed": "The target's chest is obstructed",
+  "chestcavity.msg.too_healthy": "The target is too healthy to open",
+  "chestcavity.compat.safe": "Safe to use",
+  "chestcavity.compat.bound": "Only fits the body it was taken from",
+  "effect.chestcavity.organ_rejection": "Organ Rejection"
 }

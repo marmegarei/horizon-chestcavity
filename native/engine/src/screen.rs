@@ -3,7 +3,7 @@
 //! `Cavity` and the player's inventory only; whoever owns the cavity saves it when `changed` says so.
 use crate::texts::{Msg, item_name, msg};
 use chestcavity_shared::cavity::{Cavity, SLOTS, Slot, organ};
-use horizon_client::mod_api::{Host, ItemStack, Text};
+use horizon_client::mod_api::{Host, ItemStack, Tag, Text};
 
 pub(crate) const EMPTY_SLOT: &str = "minecraft:gray_stained_glass_pane";
 
@@ -25,6 +25,26 @@ impl Click {
 
 pub fn stack(id: &str, count: u32) -> ItemStack {
     ItemStack { item: id.into(), count, damage: 0, extra: None }
+}
+
+/// The key of an organ's owner in its `minecraft:custom_data`.
+const OWNER: &str = "chestcavity:owner";
+
+/// An organ as an item: with the body it was born in written on it, when it has one.
+pub fn organ_stack(id: &str, count: u32, owner: Option<u128>) -> ItemStack {
+    let mut s = stack(id, count);
+    if let Some(owner) = owner {
+        s.data_mut().set_other("minecraft:custom_data", Some(Tag::compound([(OWNER, Tag::String(format!("{owner:032x}").as_str().into()))])));
+    }
+    s
+}
+
+/// The body an organ item was born in, when it says.
+pub fn owner_of(item: &ItemStack) -> Option<u128> {
+    match item.custom_data()?.get(&OWNER.into())? {
+        Tag::String(s) => u128::from_str_radix(&s.to_string_lossy(), 16).ok(),
+        _ => None,
+    }
 }
 
 /// The player's inventory slot (0..9 the hotbar) of a menu slot, for a menu of
@@ -57,11 +77,11 @@ pub fn click(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, slot: i32) ->
 /// Takes the organ in cavity slot `i` out into the player's inventory; an empty slot does nothing.
 pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) -> Click {
     let Some(s) = cavity.slots.get(i).cloned().flatten() else { return Click::default() };
-    let kept = host.give_stack(uuid, stack(&s.id, s.count)).map_or(0, |left| left.count);
+    let kept = host.give_stack(uuid, organ_stack(&s.id, s.count, s.owner)).map_or(0, |left| left.count);
     if kept >= s.count {
         return Click::said(msg("chestcavity.msg.no_space"));
     }
-    cavity.slots[i] = (kept > 0).then(|| Slot { id: s.id, count: kept });
+    cavity.slots[i] = (kept > 0).then(|| Slot::new(s.id, kept).owned_by(s.owner));
     Click::done()
 }
 
@@ -77,7 +97,7 @@ pub fn put_in(host: &mut dyn Host, cavity: &mut Cavity, held: ItemStack, remove:
     if !remove(host, &held) {
         return Click::said(msg("chestcavity.msg.stale"));
     }
-    cavity.slots[i] = Some(Slot { id: held.item.to_string(), count: held.count });
+    cavity.slots[i] = Some(Slot::new(held.item.to_string(), held.count).owned_by(owner_of(&held)));
     Click::done()
 }
 

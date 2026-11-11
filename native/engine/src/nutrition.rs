@@ -17,6 +17,7 @@ impl Body {
     /// `meal` has just been eaten.
     pub fn ate(&mut self, meal: Meal) {
         self.meal = Some((meal, self.ticks));
+        self.last_meal = self.meal;
     }
 
     /// Once a tick: the food bar of `uuid` against last tick's. A rise that follows a meal is what its stomach digested

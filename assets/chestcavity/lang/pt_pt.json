@@ -427,7 +427,7 @@
   "chestcavity.score.withered.name": "Resistência a Wither",
   "chestcavity.score.withered.up": "o efeito Wither dura menos",
   "chestcavity.score.panic.name": "Pânico",
-  "chestcavity.score.panic.up": "ao sofreres dano entras em pânico (efeito temporário)",
+  "chestcavity.score.panic.up": "ao sofreres dano entras em pânico e corres mais depressa durante um tempo",
   "chestcavity.score.resonance.name": "Ressonância",
   "chestcavity.score.resonance.up": "ao seres atingido, soltas uma explosão ressonante",
   "chestcavity.score.shrieking.name": "Grito",
@@ -501,5 +501,10 @@
   "chestcavity.fmt.consequence": "Consequência: %s",
   "chestcavity.fmt.stack": "Efeito completo com %s na pilha; com menos, proporcional",
   "chestcavity.fmt.idle": " (sem efeito ainda)",
-  "itemGroup.chestcavity.chestcavity": "Cavidade Torácica"
+  "itemGroup.chestcavity.chestcavity": "Cavidade Torácica",
+  "chestcavity.msg.obstructed": "O peito do alvo está tapado",
+  "chestcavity.msg.too_healthy": "O alvo está demasiado saudável para abrir",
+  "chestcavity.compat.safe": "Seguro de usar",
+  "chestcavity.compat.bound": "Só serve ao corpo de onde foi tirado",
+  "effect.chestcavity.organ_rejection": "Rejeição de Órgãos"
 }

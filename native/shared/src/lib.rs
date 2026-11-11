@@ -6,11 +6,14 @@
 pub mod abilities;
 pub mod breath;
 pub mod cavity;
+pub mod config;
 pub mod damage;
 pub mod describe;
 pub mod drops;
 pub mod effects;
 pub mod food;
 pub mod lang;
+pub mod open;
+pub mod potions;
 pub mod organs;
 pub mod teleport;

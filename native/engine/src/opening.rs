@@ -3,7 +3,8 @@
 use crate::texts::{item_name_of_mob, msg};
 use crate::{ChestCavity, MobScreen, lock, mob, trace};
 use chestcavity_shared::cavity::{get, mob_kind};
-use horizon_client::mod_api::{Host, NativeServerPlayer};
+use chestcavity_shared::open::{self, Verdict};
+use horizon_client::mod_api::{EquipmentSlot, Host, NativeServerPlayer, Tag};
 use std::sync::atomic::Ordering;
 
 /// What opening a chest cavity costs whoever it is opened on, unless it is easy to get into.
@@ -103,15 +104,54 @@ impl ChestCavity {
             Self::say(host, uuid, msg("chestcavity.msg.mob_none").arg(item_name_of_mob(kind)));
             return None;
         };
-        let Some(cavity) = mob::load(host, entity, kind) else {
+        let cfg = self.cfg();
+        let Some(cavity) = mob::load(host, entity, kind, cfg.universal_donor_rate) else {
             Self::say(host, uuid, msg("chestcavity.msg.mob_gone").arg(item_name_of_mob(kind)));
             return None;
         };
+        let easy = get(&cavity.scores(body), "ease_of_access") > 0.0;
+        if let Some((health, max, armoured)) = condition(host, entity) {
+            match open::verdict(health, max, armoured, easy, cfg.opener_absolute_health, cfg.opener_fractional_health) {
+                Verdict::Open => {}
+                Verdict::Obstructed => {
+                    host.action_bar(uuid, msg("chestcavity.msg.obstructed").text());
+                    return None;
+                }
+                Verdict::TooHealthy => {
+                    host.action_bar(uuid, msg("chestcavity.msg.too_healthy").text());
+                    return None;
+                }
+            }
+        }
         let Some(window) = mob::open_menu(host, uuid, &cavity, kind) else {
             Self::say(host, uuid, msg("chestcavity.msg.no_screen"));
             return None;
         };
         lock(&self.mob_screens).insert(uuid, MobScreen { window, entity, mob: kind.to_string(), dimension: dimension.to_string() });
-        Some(get(&cavity.scores(body), "ease_of_access") > 0.0)
+        Some(easy)
     }
+}
+
+/// A mob's health and its maximum (when its data says), and whether it wears something over the chest; none when the game
+/// does not say (then nothing stops the chest from opening).
+fn condition(host: &mut dyn Host, entity: u32) -> Option<(f32, Option<f32>, bool)> {
+    let target = host.entity(entity)?;
+    let armoured = host.living(target).and_then(|l| l.equipment(&*host, EquipmentSlot::Chest)).is_some();
+    let nbt = target.nbt(host)?;
+    let health = match nbt.get(&"Health".into())? {
+        Tag::Float(bits) => f32::from_bits(*bits),
+        Tag::Double(bits) => f64::from_bits(*bits) as f32,
+        _ => return None,
+    };
+    let max = match nbt.get(&"attributes".into()) {
+        Some(Tag::List(list)) => list.iter().find_map(|a| match a {
+            Tag::Compound(c) if matches!(c.get(&"id".into()), Some(Tag::String(s)) if s.to_string_lossy().ends_with("max_health")) => match c.get(&"base".into()) {
+                Some(Tag::Double(bits)) => Some(f64::from_bits(*bits) as f32),
+                _ => None,
+            },
+            _ => None,
+        }),
+        _ => None,
+    };
+    Some((health, max, armoured))
 }

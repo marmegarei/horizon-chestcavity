@@ -34,7 +34,11 @@ impl ChestCavity {
         for (uuid, which) in asked {
             let Some(p) = self.alive(uuid) else { continue };
             for ability in abilities::picked(&which) {
-                let said = self.with(host, uuid, |body, host| body.activate(host, &p, ability, &mut lock(&self.rng)));
+                let scale = self.cfg().cooldown_scale;
+                let said = self.with(host, uuid, |body, host| {
+                    body.scale = scale;
+                    body.activate(host, &p, ability, &mut lock(&self.rng))
+                });
                 if let Err(why) = said {
                     if ability.name == which {
                         Self::say(host, uuid, why);
@@ -62,7 +66,7 @@ impl Body {
             "silk" => self.spin(host, p, level)?,
             _ => self.shoot(host, p, ability.name, level, rng)?,
         };
-        self.rests.insert(ability.name, self.ticks + u64::from(rest.unwrap_or(ability.rest)));
+        self.rests.insert(ability.name, self.ticks + (f64::from(rest.unwrap_or(ability.rest)) * f64::from(self.scale)) as u64);
         Ok(())
     }
 

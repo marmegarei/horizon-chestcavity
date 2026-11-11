@@ -2,6 +2,9 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "chestcavity:writhing_soulsand",
+    "chestcavity:writhing_soulsand",
+    "chestcavity:writhing_soulsand",
     "chestcavity:writhing_soulsand"
   ],
   "result": {

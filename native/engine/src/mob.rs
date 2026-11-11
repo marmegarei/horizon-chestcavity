@@ -2,7 +2,8 @@
 //! until a player takes one out or puts one in with the Chest Opener.
 use crate::screen::{self, Click};
 use crate::texts::{Msg, item_name_of_mob, msg};
-use chestcavity_shared::cavity::{Cavity, mob_kind};
+use chestcavity_shared::cavity::{Cavity, Kind, mob_kind};
+use chestcavity_shared::drops::Rng;
 use horizon_client::mod_api::{AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, Host, Tag, Text};
 
 static ORGANS: AttachmentType<String> = AttachmentType {
@@ -20,13 +21,27 @@ static ORGANS: AttachmentType<String> = AttachmentType {
     sync: false,
 };
 
+/// The body a mob's organs are born in: its uuid (its id, for a game that does not say it).
+pub fn owner(host: &mut dyn Host, entity: u32) -> u128 {
+    host.entity(entity).and_then(|e| host.entity_uuid(e)).unwrap_or(u128::from(entity))
+}
+
+/// The cavity of a mob nobody has opened: its type's organs, each born in the mob's body but for the share `donors` of them
+/// that fit any body. The donors are picked from the mob's uuid, so they are the same ones every time it is looked at.
+fn fresh(host: &mut dyn Host, entity: u32, kind: &Kind, donors: f32) -> Cavity {
+    let owner = owner(host, entity);
+    let mut rng = Rng(((owner as u64) ^ ((owner >> 64) as u64)).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+    rng.next();
+    Cavity::of(kind).born(owner, || rng.chance(donors))
+}
+
 /// The cavity of mob `entity` of type `mob` (`minecraft:cow`): its type's, or as a player left it. None when
-/// the type has no chest cavity or the mob is gone.
-pub fn load(host: &mut dyn Host, entity: u32, mob: &str) -> Option<Cavity> {
+/// the type has no chest cavity or the mob is gone. `donors` is the share of a mob's organs that fit any body.
+pub fn load(host: &mut dyn Host, entity: u32, mob: &str, donors: f32) -> Option<Cavity> {
     let kind = mob_kind(mob)?;
     match ORGANS.get_existing(&mut *host, Holder::Entity(entity)) {
         Ok(Some(text)) => Some(Cavity::from_text(&text)),
-        Ok(None) => Some(Cavity::of(kind)),
+        Ok(None) => Some(fresh(host, entity, kind, donors)),
         Err(e) => {
             crate::trace::line(&*host, format!("{mob} {entity}: the game keeps no cavity for it ({e:?})"));
             None
@@ -36,15 +51,32 @@ pub fn load(host: &mut dyn Host, entity: u32, mob: &str) -> Option<Cavity> {
 
 /// The cavity a player left on mob `entity`, if one ever changed it.
 pub fn existing(host: &mut dyn Host, entity: u32) -> Option<Cavity> {
-    match ORGANS.get_existing(&mut *host, Holder::Entity(entity)) {
-        Ok(Some(text)) => Some(Cavity::from_text(&text)),
-        _ => None,
-    }
+    existing_owned(host, entity).map(|(cavity, _)| cavity)
 }
 
-/// Keeps the cavity on the mob. It can't fail for a mob `load` just found: the codec always encodes.
+/// The first line of a saved cavity: the body its organs are its own in.
+const OWNER_LINE: &str = "owner";
+
+/// The body a saved cavity says is its own.
+fn saved_owner(text: &str) -> Option<u128> {
+    let mut words = text.lines().next()?.split(' ');
+    (words.next()? == OWNER_LINE).then(|| words.next().and_then(|o| u128::from_str_radix(o, 16).ok())).flatten()
+}
+
+/// The cavity a player left on mob `entity` and the body it is its own in: the one it was saved with, since a dying mob
+/// may not be there to ask (the game's answer, for a cavity saved without one).
+pub fn existing_owned(host: &mut dyn Host, entity: u32) -> Option<(Cavity, u128)> {
+    let Ok(Some(text)) = ORGANS.get_existing(&mut *host, Holder::Entity(entity)) else { return None };
+    let owner = saved_owner(&text).unwrap_or_else(|| owner(host, entity));
+    Some((Cavity::from_text(&text), owner))
+}
+
+/// Keeps the cavity on the mob, with the body its organs are its own in. It can't fail for a mob `load` just found: the
+/// codec always encodes.
 fn save(host: &mut dyn Host, entity: u32, cavity: &Cavity) {
-    let _ = ORGANS.set(&mut *host, Holder::Entity(entity), cavity.to_text());
+    let text = format!("{OWNER_LINE} {:032x}
+{}", owner(host, entity), cavity.to_text());
+    let _ = ORGANS.set(&mut *host, Holder::Entity(entity), text);
 }
 
 /// "Cow's Chest Cavity": the mob's name in the player's language, its type's as a fallback.
@@ -59,8 +91,8 @@ pub fn open_menu(host: &mut dyn Host, uuid: u128, cavity: &Cavity, mob: &str) ->
 
 /// Changes the mob's cavity with `f`, keeping it when `f` says it changed: the cavity as it is now and
 /// what to tell the player. None when the mob has no chest cavity or is gone.
-pub fn edit(host: &mut dyn Host, entity: u32, mob: &str, f: impl FnOnce(&mut dyn Host, &mut Cavity) -> Click) -> Option<(Cavity, Option<Msg>)> {
-    let mut cavity = load(host, entity, mob)?;
+pub fn edit(host: &mut dyn Host, entity: u32, mob: &str, donors: f32, f: impl FnOnce(&mut dyn Host, &mut Cavity) -> Click) -> Option<(Cavity, Option<Msg>)> {
+    let mut cavity = load(host, entity, mob, donors)?;
     let click = f(host, &mut cavity);
     if click.changed {
         save(host, entity, &cavity);
@@ -69,8 +101,8 @@ pub fn edit(host: &mut dyn Host, entity: u32, mob: &str, f: impl FnOnce(&mut dyn
 }
 
 /// A click on menu slot `slot` of the mob's screen; what to tell the player, if anything.
-pub fn click(host: &mut dyn Host, uuid: u128, entity: u32, mob: &str, slot: i32) -> Option<Msg> {
-    let Some((cavity, msg)) = edit(host, entity, mob, |host, cavity| screen::click(host, uuid, cavity, slot)) else {
+pub fn click(host: &mut dyn Host, uuid: u128, entity: u32, mob: &str, donors: f32, slot: i32) -> Option<Msg> {
+    let Some((cavity, msg)) = edit(host, entity, mob, donors, |host, cavity| screen::click(host, uuid, cavity, slot)) else {
         return Some(msg("chestcavity.msg.mob_vanished").arg(item_name_of_mob(mob)));
     };
     host.set_menu_items(uuid, screen::items(&cavity));

@@ -13,7 +13,7 @@ fn player(health: f32) -> Player {
 fn body_with(organ: &str, count: u32) -> Body {
     let mut cavity = Cavity::of(player_kind());
     let i = cavity.slots.iter().position(Option::is_none).expect("a free slot");
-    cavity.slots[i] = Some(Slot { id: organ.into(), count });
+    cavity.slots[i] = Some(Slot::new(organ, count));
     let mut body = Body::of(cavity);
     body.food = Some((20, 5.0, 0.0));
     body

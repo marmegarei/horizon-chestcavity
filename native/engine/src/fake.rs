@@ -29,6 +29,11 @@ pub struct Fake {
     pub blocks: HashMap<[i32; 3], String>,
     /// Whether the engine let the player fly, each time it said so.
     pub flights: Vec<bool>,
+    /// The player's potion effects, and how many times the engine replaced them.
+    pub current: Vec<NativeEffect>,
+    pub set_effects_calls: u32,
+    /// The effects the engine took off the player.
+    pub removed: Vec<String>,
 }
 
 impl Fake {
@@ -51,6 +56,9 @@ impl Fake {
             summons: Vec::new(),
             blocks: HashMap::new(),
             flights: Vec::new(),
+            current: Vec::new(),
+            set_effects_calls: 0,
+            removed: Vec::new(),
         }
     }
 
@@ -140,6 +148,10 @@ impl Host for Fake {
         self.effects.push(effect.clone());
         true
     }
+    fn remove_effect(&mut self, _: u128, id: &str) -> bool {
+        self.removed.push(id.to_string());
+        true
+    }
     fn run_command(&mut self, line: &str) -> bool {
         self.commands.push(line.to_string());
         true
@@ -170,6 +182,17 @@ impl Host for Fake {
     }
     fn set_flight(&mut self, _: u128, allow: bool, _: bool) -> bool {
         self.flights.push(allow);
+        true
+    }
+    fn entity(&self, _: u32) -> Option<horizon_client::mod_api::EntityRef> {
+        None
+    }
+    fn effects(&self, _: u128) -> Option<Vec<NativeEffect>> {
+        Some(self.current.clone())
+    }
+    fn set_effects(&mut self, _: u128, effects: &[NativeEffect]) -> bool {
+        self.current = effects.to_vec();
+        self.set_effects_calls += 1;
         true
     }
     fn config_dir(&self) -> Result<std::path::PathBuf, String> {

@@ -72,3 +72,15 @@ fn a_mob_without_lungs_drowns_on_land() {
 fn modifier_ids_are_named_after_their_attribute() {
     assert_eq!(modifier_id("minecraft:max_health"), "chestcavity:cavity_max_health");
 }
+
+#[test]
+fn a_creeper_without_its_appendix_cannot_explode_and_one_with_it_can_again() {
+    let kind = mob_kind(CREEPER).expect("creeper");
+    let mut body = MobBody::new("minecraft:overworld", CREEPER, &without_giving("creepy").expect("a creeper explodes by an organ")).expect("body");
+    let fuse = |acts: &[Act]| acts.iter().find_map(|a| if let Act::Nbt(n) = a { Some(n.get(&"Fuse".into()).cloned()) } else { None });
+    assert_eq!(fuse(&body.beat(1)), Some(Some(Tag::Short(i16::MAX))));
+    assert!(!body.is_idle());
+    body.set(CREEPER, &Cavity::of(kind));
+    assert_eq!(fuse(&body.beat(2)), Some(Some(Tag::Short(30))));
+    assert!(body.beat(3).is_empty() && body.is_idle());
+}

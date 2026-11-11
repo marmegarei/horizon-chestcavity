@@ -69,7 +69,7 @@ fn a_mobs_cavity_opens_at_the_tick_and_its_organs_come_out() {
     // A shift-click takes the organ out of the zombie; the zombie keeps it that way.
     cc.clicked(&mut game, ME, WINDOW, slot as i32, 1);
     assert_eq!(game.inventory[0].as_ref().map(|s| &*s.item), Some(id));
-    assert!(mob::load(&mut game, ZOMBIE, "minecraft:zombie").unwrap().slots[slot as usize].is_none());
+    assert!(mob::load(&mut game, ZOMBIE, "minecraft:zombie", 0.1).unwrap().slots[slot as usize].is_none());
 
     // Closing the screen forgets it: a later click on another organ is nobody's.
     let &(other, _, _) = mob_kind("minecraft:zombie").unwrap().slots.get(1).unwrap();
@@ -77,7 +77,7 @@ fn a_mobs_cavity_opens_at_the_tick_and_its_organs_come_out() {
     game.inventory[0] = None;
     cc.clicked(&mut game, ME, WINDOW, other as i32, 1);
     assert_eq!(game.inventory[0], None);
-    assert!(mob::load(&mut game, ZOMBIE, "minecraft:zombie").unwrap().slots[other as usize].is_some());
+    assert!(mob::load(&mut game, ZOMBIE, "minecraft:zombie", 0.1).unwrap().slots[other as usize].is_some());
 }
 
 #[test]
@@ -138,8 +138,13 @@ fn a_click_on_a_mob_is_not_taken_for_your_own_chest() {
 
 #[test]
 fn an_organ_tells_what_it_is_good_at_in_its_tooltip_and_other_items_say_nothing() {
-    let heart = ChestCavity::tooltip_lines("chestcavity:heart");
+    let heart = ChestCavity::tooltip_lines(&crate::screen::stack("chestcavity:heart", 1));
     assert!(heart.iter().any(|l| l.plain().starts_with("Max health: +")), "{:?}", heart.iter().map(Text::plain).collect::<Vec<_>>());
     assert!(heart.iter().any(|l| l.plain().contains("without a heart you bleed")));
-    assert!(ChestCavity::tooltip_lines("minecraft:stick").is_empty());
+    assert!(ChestCavity::tooltip_lines(&crate::screen::stack("minecraft:stick", 1)).is_empty());
+    // An organ says whether it fits any body or only the one it came from.
+    let said = |lines: Vec<Text>| lines.last().map(Text::plain);
+    assert_eq!(said(heart), Some("Safe to use".to_string()));
+    let bound = ChestCavity::tooltip_lines(&crate::screen::organ_stack("chestcavity:heart", 1, Some(7)));
+    assert_eq!(said(bound), Some("Only fits the body it was taken from".to_string()));
 }

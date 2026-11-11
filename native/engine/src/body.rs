@@ -6,7 +6,8 @@ use crate::screen::{self, Click};
 use crate::texts::{Msg, item_name, msg};
 use crate::teleport;
 use chestcavity_shared::breath::Lungs;
-use chestcavity_shared::cavity::{Cavity, Scores, organ, player_kind};
+use chestcavity_shared::config::Config;
+use chestcavity_shared::cavity::{Cavity, Scores, Slot, organ, player_kind};
 use chestcavity_shared::damage::Resist;
 use chestcavity_shared::drops::Rng;
 use chestcavity_shared::effects::{self, Action, Env, Progress};
@@ -16,9 +17,16 @@ use std::collections::HashMap;
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
+/// The effect a body shows while it rejects an organ: its time is the time to the next rejection.
+const REJECTION: &str = "chestcavity:organ_rejection";
 
 pub struct Body {
+    /// Whose body it is (their uuid): what organs fit it.
+    pub uuid: u128,
     pub cavity: Cavity,
+    /// How many of its organs it rejects, and how long it has been rejecting them (ticks).
+    pub incompat: usize,
+    pub rejection: i32,
     pub normal: Scores,
     pub scores: Scores,
     /// What the organs keep count of between beats.
@@ -28,6 +36,10 @@ pub struct Body {
     pub menu: Option<i32>,
     /// The last meal eaten and the tick it was; the food bar (level, saturation, exhaustion) as it was last tick.
     pub meal: Option<(Meal, u64)>,
+    /// The last meal and its tick, kept after it has been digested (what came with it is judged by it).
+    pub last_meal: Option<(Meal, u64)>,
+    /// The effects as they were last tick, by id: the duration each should have now if nothing new came.
+    pub seen: HashMap<String, i32>,
     pub food: Option<(i32, f32, f32)>,
     /// What the lungs and the bones do, when they are not the normal ones'; the air the lungs could not count whole.
     pub lungs: Option<Lungs>,
@@ -35,6 +47,10 @@ pub struct Body {
     pub air: f32,
     /// The tick (of `ticks`) each ability rests until.
     pub rests: HashMap<&'static str, u64>,
+    /// How long abilities rest, against Chest Cavity's (`cooldown_scale` of the settings).
+    pub scale: f32,
+    /// Whether it was in water at its last beat.
+    pub in_water: bool,
     /// Whether it has been let fly because of its organs, and the game mode that was in when it was.
     pub wings: bool,
     pub mode: i32,
@@ -48,9 +64,12 @@ impl Body {
             Some(Tag::String(s)) => Some(s.to_string_lossy()),
             _ => None,
         });
-        let cavity = saved.map_or_else(|| Cavity::of(kind), |t| Cavity::from_text(&t));
-        let body = Body::of(cavity);
-        if body.cavity != Cavity::of(kind) {
+        // A body's own organs are born in it.
+        let cavity = saved.map_or_else(|| Cavity::of(kind).born(uuid, || false), |t| Cavity::from_text(&t));
+        let mut body = Body::of(cavity);
+        body.uuid = uuid;
+        body.rescore();
+        if body.scores != body.normal {
             body.apply(host, uuid);
         }
         body
@@ -58,6 +77,9 @@ impl Body {
 
     pub fn of(cavity: Cavity) -> Body {
         let mut body = Body {
+            uuid: 0,
+            incompat: 0,
+            rejection: 0,
             scores: Scores::new(),
             cavity,
             normal: Cavity::of(player_kind()).scores(player_kind()),
@@ -65,11 +87,15 @@ impl Body {
             ticks: 0,
             menu: None,
             meal: None,
+            last_meal: None,
+            seen: HashMap::new(),
             food: None,
             lungs: None,
             resist: Resist::default(),
             air: 0.0,
             rests: HashMap::new(),
+            scale: 1.0,
+            in_water: false,
             wings: false,
             mode: 0,
         };
@@ -82,12 +108,41 @@ impl Body {
         self.scores = self.cavity.scores(player_kind());
         self.lungs = Lungs::differing(&self.scores, &self.normal);
         self.resist = Resist::of(&self.scores, &self.normal);
+        self.incompat = self.cavity.incompatibility(self.uuid);
     }
 
     /// A new body, as after a death.
     pub fn reset(&mut self, host: &mut dyn Host, uuid: u128) {
-        self.cavity = Cavity::of(player_kind());
+        self.cavity = Cavity::of(player_kind()).born(uuid, || false);
         self.changed(host, uuid);
+    }
+
+    /// The body dies: what is not its own leaves it (`dropUnboundOrgans`), and is returned to be dropped. A body that keeps its
+    /// cavity through death (`keep`) gives nothing up.
+    pub fn die(&mut self, host: &mut dyn Host, uuid: u128, keep: bool) -> Vec<Slot> {
+        if keep {
+            return Vec::new();
+        }
+        let gone = self.cavity.drop_unbound(uuid);
+        if !gone.is_empty() {
+            self.changed(host, uuid);
+        }
+        gone
+    }
+
+    /// The body after a death: a new one, or, when the settings keep the chest cavity, the one it had with the rotten
+    /// organs it lacked (`insertWelfareOrgans`). What the dying did not drop (the game keeps the inventory, and the loot hook
+    /// is not told) goes back into the player's hands rather than being lost.
+    pub fn respawn(&mut self, host: &mut dyn Host, uuid: u128, keep: bool) {
+        if keep {
+            self.cavity.welfare(player_kind());
+            self.changed(host, uuid);
+            return;
+        }
+        for slot in self.cavity.drop_unbound(uuid) {
+            host.give_stack(uuid, screen::organ_stack(&slot.id, slot.count, slot.owner));
+        }
+        self.reset(host, uuid);
     }
 
     fn apply(&self, host: &mut dyn Host, uuid: u128) {
@@ -168,8 +223,30 @@ impl Body {
     }
 
     /// Once a second: what the organs do over time.
-    pub fn beat(&mut self, host: &mut dyn Host, who: &Player, env: &Env, rng: &mut Rng) {
+    pub fn beat(&mut self, host: &mut dyn Host, who: &Player, env: &Env, rng: &mut Rng, cfg: &Config) {
         let seconds = self.ticks / 20;
+        // Organs of another body are rejected: the more of them, the sooner it hurts, and the effect shows how soon.
+        if cfg.organ_rejection && self.incompat > 0 {
+            let every = cfg.rejection_rate / self.incompat as f32;
+            if self.rejection == 0 {
+                let effect = NativeEffect { id: REJECTION.into(), amplifier: 0, duration: every as i32, ambient: false, particles: false };
+                host.add_effect(who.uuid, &effect);
+            }
+            self.rejection += 20;
+            if self.rejection as f32 >= every {
+                self.rejection = 0;
+                if let Ok(target) = u32::try_from(who.entity) {
+                    host.hurt_entity(&who.dimension, target, cfg.rejection_damage, "minecraft:generic", None);
+                }
+            }
+        } else {
+            // Nothing left to reject: the effect goes with it.
+            if self.rejection > 0 {
+                host.remove_effect(who.uuid, REJECTION);
+            }
+            self.rejection = 0;
+        }
+        self.in_water = env.in_water;
         self.mend(host, who);
         for action in effects::periodic(&self.scores, &self.normal, seconds, &mut self.progress, env) {
             match action {
@@ -183,6 +260,12 @@ impl Body {
                     host.add_effect(who.uuid, &effect);
                 }
                 Action::Nourish { hunger, saturation, heal } => self.nourish(host, who, hunger, saturation, heal),
+                Action::Heal(amount) => {
+                    let health = (who.health + amount).min(self.max_health());
+                    if who.health > 0.0 && health > who.health {
+                        host.set_player_status(who.uuid, Some(health), None, None);
+                    }
+                }
                 Action::Teleport { range } => {
                     teleport::randomly(host, who, f64::from(range), rng);
                 }
