@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Packs target/chestcavity.hmod: the content mod (assets/, data/, horizon-mod.toml) and the native
-bundle (horizon-native.json, mixins/chestcavity/) in one file, as docs/api/mod-files.md describes.
-Re-runnable. Check it with `cargo horizon-mod check target/chestcavity.hmod`."""
+"""Packs what Horizon installs (docs/api/mod-files.md), into target/:
+  chestcavity.hnmod         the native code only (horizon-native.json + mixins/chestcavity/); goes in horizon-native-mods/
+  chestcavity-content.hmod  the content only (items, models, recipes); goes in horizon-mods/
+  chestcavity.hmod          both in one file, for a launcher and game that read content from a native .hmod
+                            (newer than Nightly 2026-11-08, which does not)
+Re-runnable. Check each with `cargo horizon-mod check <file>`."""
 import json
 import re
 import zipfile
@@ -17,26 +20,34 @@ HOOKS = 411
 ID = "chestcavity"
 
 
+def pack(out, version, content, native):
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        if content:
+            z.write(ROOT / "horizon-mod.toml", "horizon-mod.toml")
+            for top in ("assets", "data"):
+                for p in sorted((ROOT / top).rglob("*")):
+                    if p.is_file():
+                        z.write(p, p.relative_to(ROOT).as_posix())
+        if native:
+            manifest = {"schema": 1, "id": ID, "version": version, "game": "26.3", "horizon": HORIZON, "mixins": MIXINS, "hooks": HOOKS}
+            z.writestr("horizon-native.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+            # Only what a bundle may carry: .rs and .toml (no Cargo.lock, no target/).
+            for p in sorted(BUNDLE.rglob("*")):
+                if p.is_file() and p.suffix in (".rs", ".toml") and "target" not in p.relative_to(BUNDLE).parts:
+                    z.write(p, f"mixins/{ID}/" + p.relative_to(BUNDLE).as_posix())
+    print(f"{out.name} ({out.stat().st_size} bytes, version {version})")
+
+
 def main():
     toml = (BUNDLE / "horizon-mixin.toml").read_text(encoding="utf-8")
     version = re.search(r'^version\s*=\s*"([^"]+)"', toml, re.M).group(1)
     assert f'horizon_revision = "{HORIZON}"' in toml, "horizon-mixin.toml pins another Horizon"
     assert f'version = "{version}"' in (ROOT / "horizon-mod.toml").read_text(encoding="utf-8"), "versions differ"
-    native = {"schema": 1, "id": ID, "version": version, "game": "26.3", "horizon": HORIZON, "mixins": MIXINS, "hooks": HOOKS}
-    out = ROOT / "target" / f"{ID}.hmod"
-    out.parent.mkdir(exist_ok=True)
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(ROOT / "horizon-mod.toml", "horizon-mod.toml")
-        for top in ("assets", "data"):
-            for p in sorted((ROOT / top).rglob("*")):
-                if p.is_file():
-                    z.write(p, p.relative_to(ROOT).as_posix())
-        z.writestr("horizon-native.json", json.dumps(native, indent=2, sort_keys=True) + "\n")
-        # Only what a bundle may carry: .rs and .toml (no Cargo.lock, no target/).
-        for p in sorted(BUNDLE.rglob("*")):
-            if p.is_file() and p.suffix in (".rs", ".toml") and "target" not in p.relative_to(BUNDLE).parts:
-                z.write(p, f"mixins/{ID}/" + p.relative_to(BUNDLE).as_posix())
-    print(f"{out} ({out.stat().st_size} bytes, version {version})")
+    out = ROOT / "target"
+    out.mkdir(exist_ok=True)
+    pack(out / f"{ID}.hnmod", version, content=False, native=True)
+    pack(out / f"{ID}-content.hmod", version, content=True, native=False)
+    pack(out / f"{ID}.hmod", version, content=True, native=True)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 /target
 vendor/
 
+native/**/Cargo.lock
 __pycache__/
 *.pyc
