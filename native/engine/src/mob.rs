@@ -40,7 +40,7 @@ fn fresh(host: &mut dyn Host, entity: u32, kind: &Kind, donors: f32) -> Cavity {
 pub fn load(host: &mut dyn Host, entity: u32, mob: &str, donors: f32) -> Option<Cavity> {
     let kind = mob_kind(mob)?;
     match ORGANS.get_existing(&mut *host, Holder::Entity(entity)) {
-        Ok(Some(text)) => Some(Cavity::from_text(&text)),
+        Ok(Some(text)) => Some(restore(host, entity, &text).0),
         Ok(None) => Some(fresh(host, entity, kind, donors)),
         Err(e) => {
             crate::trace::line(&*host, format!("{mob} {entity}: the game keeps no cavity for it ({e:?})"));
@@ -67,15 +67,25 @@ fn saved_owner(text: &str) -> Option<u128> {
 /// may not be there to ask (the game's answer, for a cavity saved without one).
 pub fn existing_owned(host: &mut dyn Host, entity: u32) -> Option<(Cavity, u128)> {
     let Ok(Some(text)) = ORGANS.get_existing(&mut *host, Holder::Entity(entity)) else { return None };
-    let owner = saved_owner(&text).unwrap_or_else(|| owner(host, entity));
-    Some((Cavity::from_text(&text), owner))
+    Some(restore(host, entity, &text))
+}
+
+/// A saved cavity as the mob lives by it, and the body it is own to: one saved before organs had owners (before version
+/// 0.8) has every organ its own.
+fn restore(host: &mut dyn Host, entity: u32, text: &str) -> (Cavity, u128) {
+    match saved_owner(text) {
+        Some(owner) => (Cavity::from_text(text), owner),
+        None => {
+            let owner = owner(host, entity);
+            (Cavity::from_text(text).born(owner, || false), owner)
+        }
+    }
 }
 
 /// Keeps the cavity on the mob, with the body its organs are its own in. It can't fail for a mob `load` just found: the
 /// codec always encodes.
 fn save(host: &mut dyn Host, entity: u32, cavity: &Cavity) {
-    let text = format!("{OWNER_LINE} {:032x}
-{}", owner(host, entity), cavity.to_text());
+    let text = format!("{OWNER_LINE} {:032x}\n{}", owner(host, entity), cavity.to_text());
     let _ = ORGANS.set(&mut *host, Holder::Entity(entity), text);
 }
 

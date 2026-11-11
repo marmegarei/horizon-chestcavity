@@ -17,6 +17,9 @@ use std::collections::HashMap;
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
+/// The first line of a saved cavity since organs have owners. A cavity saved without it (before version 0.8) has none, and
+/// every organ in it is its body's.
+const OWNERS: &str = "owners";
 /// The effect a body shows while it rejects an organ: its time is the time to the next rejection.
 const REJECTION: &str = "chestcavity:organ_rejection";
 
@@ -65,7 +68,11 @@ impl Body {
             _ => None,
         });
         // A body's own organs are born in it.
-        let cavity = saved.map_or_else(|| Cavity::of(kind).born(uuid, || false), |t| Cavity::from_text(&t));
+        let cavity = match saved {
+            Some(t) if t.starts_with(OWNERS) => Cavity::from_text(&t),
+            Some(t) => Cavity::from_text(&t).born(uuid, || false),
+            None => Cavity::of(kind).born(uuid, || false),
+        };
         let mut body = Body::of(cavity);
         body.uuid = uuid;
         body.rescore();
@@ -157,7 +164,7 @@ impl Body {
         self.apply(host, uuid);
         let mut data = host.player_persistent_data(uuid).unwrap_or_else(|| Tag::compound(Vec::<(&str, Tag)>::new()));
         if let Tag::Compound(map) = &mut data {
-            map.insert(KEY.into(), Tag::String(self.cavity.to_text().as_str().into()));
+            map.insert(KEY.into(), Tag::String(format!("{OWNERS}\n{}", self.cavity.to_text()).as_str().into()));
         }
         host.set_player_persistent_data(uuid, data);
         if self.menu.is_some() {

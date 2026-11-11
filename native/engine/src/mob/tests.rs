@@ -86,12 +86,18 @@ fn a_saved_cavity_remembers_whose_organs_are_its_own_even_if_the_mob_is_not_ther
     let (cavity, owner) = existing_owned(&mut game, ZOMBIE).expect("it was opened");
     assert_eq!(owner, u128::from(ZOMBIE), "the game's uuid of it (here its id)");
     assert!(cavity.slots[slot].is_none() && cavity.slots.iter().flatten().all(|s| s.owner == Some(owner)));
-    assert_eq!(saved_owner("owner 0000000000000000000000000000000a
-3 chestcavity:heart 1
-"), Some(10));
-    assert_eq!(saved_owner("3 chestcavity:heart 1
-"), None, "a cavity saved before the line existed");
-    assert_eq!(Cavity::from_text("owner 0000000000000000000000000000000a
-3 chestcavity:heart 1
-").slots[3], Some(Slot::new("chestcavity:heart", 1)));
+    assert_eq!(saved_owner("owner 0000000000000000000000000000000a\n3 chestcavity:heart 1\n"), Some(10));
+    assert_eq!(saved_owner("3 chestcavity:heart 1\n"), None, "a cavity saved before the line existed");
+    assert_eq!(Cavity::from_text("owner 0000000000000000000000000000000a\n3 chestcavity:heart 1\n").slots[3], Some(Slot::new("chestcavity:heart", 1)));
+}
+
+#[test]
+fn a_cavity_saved_before_organs_had_owners_has_them_all_its_own() {
+    let (mut game, _, _) = zombie_world();
+    ORGANS.set(&mut game as &mut dyn Host, Holder::Entity(ZOMBIE), "3 chestcavity:rotten_heart 1\n5 chestcavity:rotten_lung 1\n".to_string()).expect("saved");
+    let (cavity, owner) = existing_owned(&mut game, ZOMBIE).expect("opened once");
+    assert!(cavity.slots.iter().flatten().all(|s| s.owner == Some(owner)), "{cavity:?}");
+    assert_eq!(cavity.slots.iter().flatten().count(), 2);
+    let loaded = load(&mut game, ZOMBIE, "minecraft:zombie", 1.0).unwrap();
+    assert!(loaded.slots.iter().flatten().all(|s| s.owner == Some(owner)), "donors are picked for cavities nobody opened, not for these");
 }

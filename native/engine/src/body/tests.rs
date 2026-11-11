@@ -151,3 +151,26 @@ fn the_rejection_effect_goes_when_the_organ_that_caused_it_does() {
     body.beat(&mut game, &who, &Env::default(), &mut Rng(1), &cfg);
     assert_eq!(game.removed.len(), 1, "it is taken off once");
 }
+
+#[test]
+fn a_body_saved_before_organs_had_owners_owns_them_all_and_what_is_saved_now_keeps_its_donors() {
+    let mut game = Fake::new();
+    // What version 0.7 saved: the organs and no owners.
+    let before = Cavity::of(player_kind());
+    game.data = Some(Tag::compound([(KEY, Tag::String(before.to_text().as_str().into()))]));
+    let mut body = Body::load(&mut game, ME);
+    assert!(body.cavity.slots.iter().flatten().all(|s| s.owner == Some(ME)), "every organ is its own");
+    assert!(body.cavity.drop_unbound(ME).is_empty(), "so none leaves it when it dies");
+
+    // Saved now it says so, and an organ that fits any body (a donor's) is still that after loading again.
+    let i = heart_slot(&body);
+    body.cavity.slots[i] = Some(Slot::new("chestcavity:heart", 1));
+    body.changed(&mut game, ME);
+    let text = match game.data.as_ref().and_then(|d| d.get(KEY)) {
+        Some(Tag::String(s)) => s.to_string_lossy(),
+        other => panic!("saved as {other:?}"),
+    };
+    assert!(text.starts_with("owners\n"), "{text}");
+    let again = Body::load(&mut game, ME);
+    assert!(again.cavity.slots[i].as_ref().is_some_and(|s| s.owner.is_none()), "a donor's organ stays everyone's");
+}

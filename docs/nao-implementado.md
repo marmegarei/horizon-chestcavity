@@ -1,4 +1,4 @@
-# Chest Cavity para o Horizon: o que falta (versão 0.8.1)
+# Chest Cavity para o Horizon: o que falta (versão 0.8.2)
 
 Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest Cavity Beyond e o Astro Adds, lidos em `vendor/`. Nada daqui foi ainda testado dentro do jogo: o que está em "Feito" compila, passa os testes e usa hooks que a documentação do Horizon descreve, mas só o jogo diz se se comporta como deve.
 

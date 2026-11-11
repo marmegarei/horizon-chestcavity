@@ -2,7 +2,7 @@
 # Build with `horizon-launcher native-build <this folder> --instance <instance> --trust-native-code`.
 [mod]
 id = "chestcavity"
-version = "0.8.1"
+version = "0.8.2"
 
 [compatibility]
 horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"

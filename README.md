@@ -5,7 +5,7 @@ Astro Adds content) to [Horizon](https://github.com/horizon-rust/horizon), Minec
 Every player and mob has organs in their chest. Open it with the Chest Opener, swap organs, and live
 with the consequences.
 
-Status: version 0.8.1, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
+Status: version 0.8.2, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
 original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) (in Portuguese).
 
 ## What works
