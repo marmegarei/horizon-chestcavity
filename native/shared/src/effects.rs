@@ -20,6 +20,11 @@ const ATTRIBUTES: &[(&str, &str, f64, bool, f64)] = &[
     ("breath_capacity", "minecraft:oxygen_bonus", 0.0, false, 1.0),
 ];
 
+/// How far one point of `score` moves its attribute (the table above), for describing an organ.
+pub fn rate(score: &str) -> Option<f64> {
+    ATTRIBUTES.iter().find(|a| a.0 == score).map(|a| a.4)
+}
+
 /// The base value of every attribute the organs touch for `now` against the
 /// body's `normal` scores, in the order to set them (a later entry for the
 /// same attribute wins). A normal body gets vanilla's bases back.
@@ -89,9 +94,9 @@ pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, bleed: &mut u32, in
 
 /// The scores the summary shows, with their names.
 const SHOWN: &[(&str, &str)] = &[
-    ("health", "Health"), ("strength", "Strength"), ("speed", "Speed"), ("defense", "Defense"),
-    ("nerves", "Nerves"), ("filtration", "Filtration"), ("breath_recovery", "Breath"),
-    ("digestion", "Digestion"), ("nutrition", "Nutrition"), ("luck", "Luck"),
+    ("health", "Vida"), ("strength", "Força"), ("speed", "Velocidade"), ("defense", "Defesa"),
+    ("nerves", "Nervos"), ("filtration", "Filtração"), ("breath_recovery", "Respiração"),
+    ("digestion", "Digestão"), ("nutrition", "Nutrição"), ("luck", "Sorte"),
 ];
 
 /// "Health 1.0 (-1.0)": each shown score, with how far it is from normal.

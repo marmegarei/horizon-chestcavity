@@ -1,6 +1,5 @@
 //! A mob's chest cavity, kept on the mob itself (a server attachment, saved with it): its type's organs
 //! until a player takes one out or puts one in with the Chest Opener.
-use crate::body::NO_HELD;
 use crate::screen::{self, Click};
 use chestcavity_shared::cavity::{Cavity, mob_kind, mob_name};
 use horizon_client::mod_api::{AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, Host, Tag, Text};
@@ -36,15 +35,15 @@ fn save(host: &mut dyn Host, entity: u32, cavity: &Cavity) {
     let _ = ORGANS.set(&mut *host, Holder::Entity(entity), cavity.to_text());
 }
 
-/// "Cow's Chest Cavity".
-pub fn title(mob: &str) -> String {
-    format!("{}'s Chest Cavity", mob_name(mob))
+/// "Cavidade torácica de Vaca": the mob's name in the player's language, its type's as a fallback.
+pub fn title(mob: &str) -> Text {
+    let name = Text::translate_with_fallback(&format!("entity.{}", mob.replace(':', ".")), &mob_name(mob), &[]);
+    Text::literal("Cavidade torácica de ").append(name)
 }
-
 /// Opens the mob's server menu for player `uuid`: its window id; none for the window's own player,
 /// whom the game's menus don't reach.
 pub fn open_menu(host: &mut dyn Host, uuid: u128, cavity: &Cavity, mob: &str) -> Option<i32> {
-    host.open_menu(uuid, 3, Text::literal(title(mob)), screen::items(cavity))
+    host.open_menu(uuid, 3, title(mob), screen::items(cavity))
 }
 
 /// Changes the mob's cavity with `f`, keeping it when `f` says it changed: the cavity as it is now and
@@ -61,22 +60,10 @@ pub fn edit(host: &mut dyn Host, entity: u32, mob: &str, f: impl FnOnce(&mut dyn
 /// A click on menu slot `slot` of the mob's screen; what to tell the player, if anything.
 pub fn click(host: &mut dyn Host, uuid: u128, entity: u32, mob: &str, slot: i32) -> Option<String> {
     let Some((cavity, msg)) = edit(host, entity, mob, |host, cavity| screen::click(host, uuid, cavity, slot)) else {
-        return Some(format!("{} is gone", mob_name(mob)));
+        return Some(format!("{} desapareceu", mob_name(mob)));
     };
     host.set_menu_items(uuid, screen::items(&cavity));
     msg
-}
-
-/// Puts the organ in the player's main hand into the mob; what to tell the player.
-pub fn put_held(host: &mut dyn Host, uuid: u128, entity: u32, mob: &str) -> (Option<Cavity>, String) {
-    let Some(held) = host.held_stack(uuid) else { return (load(host, entity, mob), NO_HELD.into()) };
-    let edited = edit(host, entity, mob, |host, cavity| {
-        screen::put_in(host, cavity, held.clone(), |host, h| host.take_items(&h.item, h.count) == h.count)
-    });
-    match edited {
-        Some((cavity, msg)) => (Some(cavity), msg.unwrap_or_else(|| format!("Put {} in", held.item))),
-        None => (None, format!("{} is gone", mob_name(mob))),
-    }
 }
 
 #[cfg(test)]

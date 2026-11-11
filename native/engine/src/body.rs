@@ -2,13 +2,13 @@
 //! that edits it. Everything goes through `Host` with the player's UUID, so a
 //! test double can stand in for the game.
 use crate::screen::{self, Click};
-use chestcavity_shared::cavity::{Cavity, Scores, player_kind};
+use chestcavity_shared::cavity::{Cavity, Scores, organ, player_kind};
 use chestcavity_shared::effects::{self, Action};
 use horizon_client::mod_api::{Host, ItemStack, NativeEffect, Tag, Text};
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
-pub const NO_HELD: &str = "Hold an organ in your main hand to put it in";
+pub const NO_HELD: &str = "Segura um órgão na mão principal para o meter";
 
 pub struct Body {
     pub cavity: Cavity,
@@ -70,7 +70,7 @@ impl Body {
 
     /// Opens the screen: the 27 slots as a chest. Click an organ to take it out, an organ of yours below to put it in.
     pub fn open(&mut self, host: &mut dyn Host, uuid: u128) -> bool {
-        self.menu = host.open_menu(uuid, 3, Text::literal("Chest Cavity".to_string()), screen::items(&self.cavity));
+        self.menu = host.open_menu(uuid, 3, Text::literal("Cavidade torácica"), screen::items(&self.cavity));
         self.menu.is_some()
     }
 
@@ -107,7 +107,7 @@ impl Body {
     pub fn put_held(&mut self, host: &mut dyn Host, uuid: u128) -> String {
         let Some(held) = host.held_stack(uuid) else { return NO_HELD.into() };
         self.put_in(host, uuid, held.clone(), |host, h| host.take_items(&h.item, h.count) == h.count)
-            .unwrap_or_else(|| format!("Put {} in", held.item))
+            .unwrap_or_else(|| format!("Meteste {} na cavidade", organ(&held.item).map_or(held.item.as_ref(), |o| o.name)))
     }
 
     /// Once a second: what the organs do over time. `eyes` is the block at the player's eyes.

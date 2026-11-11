@@ -58,7 +58,7 @@ pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) 
     let Some(s) = cavity.slots.get(i).cloned().flatten() else { return Click::default() };
     let kept = host.give_stack(uuid, stack(&s.id, s.count)).map_or(0, |left| left.count);
     if kept >= s.count {
-        return Click::said("No room in your inventory");
+        return Click::said("Sem espaço no inventário");
     }
     cavity.slots[i] = (kept > 0).then(|| Slot { id: s.id, count: kept });
     Click::done()
@@ -66,21 +66,21 @@ pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) 
 
 /// Puts `held`, an organ of the player's, in the first empty slot; `remove` takes it from where it is.
 pub fn put_in(host: &mut dyn Host, cavity: &mut Cavity, held: ItemStack, remove: impl FnOnce(&mut dyn Host, &ItemStack) -> bool) -> Click {
-    let Some(o) = organ(&held.item) else { return Click::said(format!("{} is not an organ", held.item)) };
+    let Some(o) = organ(&held.item) else { return Click::said(format!("{} não é um órgão", held.item)) };
     if held.count > o.stack {
-        return Click::said(format!("Put at most {} {} in at a time", o.stack, o.name));
+        return Click::said(format!("Mete no máximo {} {} de cada vez", o.stack, o.name));
     }
     let Some(i) = cavity.slots.iter().position(Option::is_none) else {
-        return Click::said("Every slot is taken: take an organ out first");
+        return Click::said("Todas as ranhuras estão ocupadas: tira um órgão primeiro");
     };
     if !remove(host, &held) {
-        return Click::said("That stack changed");
+        return Click::said("Essa pilha mudou");
     }
     cavity.slots[i] = Some(Slot { id: held.item.to_string(), count: held.count });
     Click::done()
 }
 
-/// One line a slot: " 3. Heart", " 4. (empty)".
+/// One line a slot: " 3. Heart", " 4. (vazia)".
 pub fn list(cavity: &Cavity) -> Vec<String> {
     cavity
         .slots
@@ -91,7 +91,7 @@ pub fn list(cavity: &Cavity) -> Vec<String> {
                 let name = organ(&s.id).map_or(s.id.as_str(), |o| o.name);
                 if s.count > 1 { format!("{:>2}. {name} x{}", i + 1, s.count) } else { format!("{:>2}. {name}", i + 1) }
             }
-            None => format!("{:>2}. (empty)", i + 1),
+            None => format!("{:>2}. (vazia)", i + 1),
         })
         .collect()
 }
