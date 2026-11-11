@@ -1,7 +1,7 @@
 id = "chestcavity"
 name = "Chest Cavity"
-version = "0.1.1"
-description = "Organs for Horizon: 291 organ items and 175 recipes from Chest Cavity (Tigereye504) with Chest Cavity Beyond and Astro Adds content. Content only for now: the chest cavity itself, organ effects and mob drops need the native port."
+version = "0.2.0"
+description = "Organs inside you and every mob: open your chest with the Chest Opener, swap organs, and live with the consequences. Mobs drop their organs. Port of Chest Cavity (Tigereye504) with Chest Cavity Beyond and Astro Adds content. Native code: needs a native build of the game."
 authors = ["marmegarei", "Tigereye504 (original Chest Cavity)", "zhaijineet (Chest Cavity Beyond)", "A5TR0spud (Chest Cavity Astro Adds)"]
 api = "0.2"
 side = "both"

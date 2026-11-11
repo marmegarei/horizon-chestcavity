@@ -1,0 +1,11 @@
+[package]
+name = "mod-chestcavity"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+# The launcher points this at the Horizon source it builds the game from. Any other
+# dependency must be a crate and version in Horizon's Cargo.lock.
+horizon-client = { git = "https://github.com/horizon-rust/horizon", rev = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca" }
+# The bundle's own `[[crate]]`: the rules with no game in them (native/shared).
+chestcavity-shared = { path = "../shared" }

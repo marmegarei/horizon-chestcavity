@@ -1,0 +1,16 @@
+# Chest Cavity for Horizon: a native trait mod (docs/native-mods.md, "Trait mods").
+# Build with `horizon-launcher native-build <this folder> --instance <instance> --trust-native-code`.
+[mod]
+id = "chestcavity"
+version = "0.2.0"
+
+[compatibility]
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
+
+[api]
+path = "engine"
+
+# The rules with no game in them; the engine depends on it by path.
+[[crate]]
+id = "shared"
+path = "shared"
