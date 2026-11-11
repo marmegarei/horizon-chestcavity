@@ -1,7 +1,7 @@
 //! Astro Adds' organs that work on the other organs (`AstralCavityUtil`): regrowth fills the empty slots, autophagy eats the
 //! organs that are food, tumors grow where something was eaten, hunters clear the harmful ones and the sculk infection turns
 //! food into sculk tumors. Rules on a `Cavity`; the engine times them and feeds the body.
-use crate::cavity::{Cavity, Kind, Slot, organ};
+use crate::cavity::{Cavity, Kind, SLOTS, Slot, organ};
 use crate::drops::Rng;
 
 /// Ticks between each of them (`CCAAConfig`: `REGROWTH_COOLDOWN`, `AUTOPHAGY_COOLDOWN`, `TUMOR_HUNTING_COOLDOWN`,
@@ -54,10 +54,11 @@ fn tumor(rng: &mut Rng) -> Slot {
 /// Regrowth (`growBackOrgans`): the first `n` empty slots get the organ their type has there, full; where the type has none,
 /// or one time in four, or where its organ is dirt, a tumor. Returns what it costs a player in exhaustion: 0.25, and for a
 /// food organ 0.25 for each of the stack and each point of food and saturation it would give. `owner` is whose the new organs
-/// are (None for a body that tags none).
+/// are (None for a body that tags none). Only the slots of the type's own cavity grow back: a fourth row is the player's
+/// to keep as they like.
 pub fn grow_back(cavity: &mut Cavity, kind: &Kind, n: u32, rng: &mut Rng, owner: Option<u128>) -> f32 {
     let (mut left, mut tired) = (n, 0.0);
-    for i in 0..cavity.slots.len() {
+    for i in 0..cavity.slots.len().min(SLOTS) {
         if left == 0 {
             break;
         }
@@ -189,6 +190,10 @@ mod tests {
         assert!(full.slots.iter().all(Option::is_some));
         assert!(at(&full, first_free).is_some_and(|id| id.ends_with("_tumor")));
         assert!(full.slots[heart].as_ref().is_some_and(|s| s.owner == Some(5)), "they are whose the engine says");
+        // A fourth row is left as the player has it.
+        let mut grown = Cavity::of(kind).grown();
+        grow_back(&mut grown, kind, 100, &mut rng, None);
+        assert!(grown.slots[SLOTS..].iter().all(Option::is_none));
     }
 
     #[test]

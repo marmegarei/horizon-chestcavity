@@ -174,3 +174,68 @@ fn a_body_saved_before_organs_had_owners_owns_them_all_and_what_is_saved_now_kee
     let again = Body::load(&mut game, ME);
     assert!(again.cavity.slots[i].as_ref().is_some_and(|s| s.owner.is_none()), "a donor's organ stays everyone's");
 }
+
+/// A body whose heart is out of its chest, with the heart in the hotbar.
+fn heartless(game: &mut Fake) -> Body {
+    let mut body = Body::load(game, ME);
+    let i = heart_slot(&body);
+    body.take_out(game, ME, i);
+    body
+}
+
+#[test]
+fn an_organ_goes_back_to_its_own_place_and_a_second_one_to_the_free_slot() {
+    let mut game = Fake::new();
+    let mut body = heartless(&mut game);
+    let lung = body.cavity.slots.iter().position(|s| s.as_ref().is_some_and(|s| s.id == "chestcavity:lung")).expect("a lung");
+    body.take_out(&mut game, ME, lung);
+    // The first free slot is the lung's, but the heart goes where it belongs, not where there is room.
+    assert_eq!((game.inventory[0].as_ref().map(|s| &*s.item), game.inventory[1].as_ref().map(|s| &*s.item)), (Some("chestcavity:heart"), Some("chestcavity:lung")));
+    body.click(&mut game, ME, (SLOTS + 27) as i32);
+    assert_eq!(body.cavity.slots[4].as_ref().map(|s| s.id.as_str()), Some("chestcavity:heart"));
+    assert!(body.cavity.slots[lung].is_none());
+    body.click(&mut game, ME, (SLOTS + 27 + 1) as i32);
+    assert_eq!(body.cavity.slots[lung].as_ref().map(|s| s.id.as_str()), Some("chestcavity:lung"));
+    // A second heart has no place: it takes the neutral slot of the third row.
+    game.inventory[0] = Some(stack("chestcavity:heart", 1));
+    body.click(&mut game, ME, (SLOTS + 27) as i32);
+    assert_eq!(body.cavity.slots[6].as_ref().map(|s| s.id.as_str()), Some("chestcavity:heart"));
+}
+
+#[test]
+fn a_chest_that_grew_opens_with_four_rows_and_works_all_the_way_down() {
+    let mut game = Fake::new();
+    let mut body = Body::load(&mut game, ME);
+    assert!(body.open(&mut game, ME));
+    assert_eq!((game.menu_rows, game.menu.as_ref().map(Vec::len)), (Some(3), Some(27)));
+    assert!(body.grow(&mut game, ME));
+    assert!(!body.grow(&mut game, ME), "it grows once");
+    assert!(body.open(&mut game, ME));
+    assert_eq!((game.menu_rows, game.menu.as_ref().map(Vec::len)), (Some(4), Some(36)));
+
+    // An organ with no place of its own goes to the neutral slot, then to the fourth row; both can be taken out again.
+    game.inventory[0] = Some(stack("chestcavity:silk_gland", 1));
+    game.inventory[1] = Some(stack("chestcavity:venom_gland", 1));
+    body.click(&mut game, ME, (36 + 27) as i32);
+    body.click(&mut game, ME, (36 + 27 + 1) as i32);
+    assert_eq!(body.cavity.slots[6].as_ref().map(|s| s.id.as_str()), Some("chestcavity:silk_gland"));
+    assert_eq!(body.cavity.slots[27].as_ref().map(|s| s.id.as_str()), Some("chestcavity:venom_gland"));
+    assert_eq!(body.click(&mut game, ME, 27), None);
+    assert!(body.cavity.slots[27].is_none());
+    assert_eq!(game.inventory[0].as_ref().map(|s| &*s.item), Some("chestcavity:venom_gland"));
+    assert_eq!(inventory_slot(36, 36 + 27), Some(0), "the hotbar comes after the 36 slots");
+}
+
+#[test]
+fn a_cluttered_chest_is_tidied_when_opened_and_the_tidying_is_saved() {
+    let mut game = Fake::new();
+    let mut body = Body::load(&mut game, ME);
+    // The heart sits in the neutral slot, its own place empty.
+    body.cavity.slots[6] = body.cavity.slots[4].take();
+    body.changed(&mut game, ME);
+    assert!(body.open(&mut game, ME));
+    assert_eq!(body.cavity.slots[4].as_ref().map(|s| s.id.as_str()), Some("chestcavity:heart"));
+    assert!(body.cavity.slots[6].is_none());
+    assert_eq!(game.menu.as_ref().expect("a menu")[4].as_ref().map(|s| &*s.item), Some("chestcavity:heart"), "and it is shown there");
+    assert!(Body::load(&mut game, ME).cavity.slots[6].is_none(), "saved");
+}

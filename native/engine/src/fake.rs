@@ -1,6 +1,6 @@
 //! The game as far as the engine asks of it, for the tests: a player's data, attributes, inventory,
 //! commands, effects, the screen they have open, and the attachments of mobs.
-use horizon_client::mod_api::{AttachmentError, Attachments, Compound, Holder, Host, ItemStack, NativeEffect, Tag, Text};
+use horizon_client::mod_api::{AttachmentError, Attachments, BlockStateId, Compound, Holder, Host, ItemStack, NativeEffect, Tag, Text};
 use std::collections::HashMap;
 
 pub struct Fake {
@@ -34,6 +34,10 @@ pub struct Fake {
     pub set_effects_calls: u32,
     /// The effects the engine took off the player.
     pub removed: Vec<String>,
+    /// The blocks the engine set: dimension, position, state (0 is air).
+    pub set_blocks: Vec<(String, [i32; 3], u32)>,
+    /// The rows of the last menu the engine opened.
+    pub menu_rows: Option<u8>,
 }
 
 impl Fake {
@@ -59,6 +63,8 @@ impl Fake {
             current: Vec::new(),
             set_effects_calls: 0,
             removed: Vec::new(),
+            set_blocks: Vec::new(),
+            menu_rows: None,
         }
     }
 
@@ -104,11 +110,12 @@ impl Host for Fake {
         Some(self.inventory.clone())
     }
     fn open_menu(&mut self, _: u128, rows: u8, title: Text, items: Vec<Option<ItemStack>>) -> Option<i32> {
-        assert_eq!((rows, items.len()), (3, 27));
+        assert_eq!(rows as usize * 9, items.len(), "a menu of whole rows");
         if !self.server_menus {
             return None;
         }
         self.menu = Some(items);
+        self.menu_rows = Some(rows);
         self.menu_title = Some(title.plain());
         Some(5)
     }
@@ -173,6 +180,16 @@ impl Host for Fake {
     fn summon(&mut self, _: &str, kind: &str, pos: [f64; 3], nbt: Compound) -> Option<u32> {
         self.summons.push((kind.to_string(), pos, nbt));
         Some(self.summons.len() as u32)
+    }
+    fn default_state(&self, block: &str) -> Option<BlockStateId> {
+        Some(BlockStateId(u32::from(block != "minecraft:air")))
+    }
+    fn set_block(&mut self, dimension: &str, pos: [i32; 3], state: BlockStateId, _: i32) -> bool {
+        self.set_blocks.push((dimension.to_string(), pos, state.0));
+        if state.0 == 0 {
+            self.blocks.remove(&pos);
+        }
+        true
     }
     fn block(&self, pos: [i32; 3]) -> String {
         self.blocks.get(&pos).cloned().unwrap_or_else(|| "minecraft:air".to_string())

@@ -1,6 +1,6 @@
 id = "chestcavity"
 name = "Chest Cavity"
-version = "0.9.0"
+version = "0.10.0"
 description = "Organs inside you and every mob: open your chest with the Chest Opener, swap organs, and live with the consequences. Mobs drop their organs. Port of Chest Cavity (Tigereye504) with Chest Cavity Beyond and Astro Adds content. Native code: needs a native build of the game."
 authors = ["marmegarei", "Tigereye504 (original Chest Cavity)", "zhaijineet (Chest Cavity Beyond)", "A5TR0spud (Chest Cavity Astro Adds)"]
 api = "0.2"

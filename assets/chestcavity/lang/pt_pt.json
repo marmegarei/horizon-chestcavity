@@ -468,6 +468,8 @@
   "chestcavity.msg.not_organ": "%s não é um órgão",
   "chestcavity.msg.max_stack": "Mete no máximo %s %s de cada vez",
   "chestcavity.msg.full": "Todas as ranhuras estão ocupadas: tira um órgão primeiro",
+  "chestcavity.msg.grown": "A tua cavidade torácica ganhou uma quarta fila",
+  "chestcavity.msg.already_grown": "A tua cavidade torácica já tem a quarta fila",
   "chestcavity.msg.stale": "Essa pilha mudou",
   "chestcavity.msg.mob_none": "%s não tem cavidade torácica",
   "chestcavity.msg.mob_gone": "%s já não está aqui ou o jogo não guarda a cavidade dele",

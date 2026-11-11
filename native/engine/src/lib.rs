@@ -9,6 +9,7 @@ mod astro;
 mod body;
 mod combat;
 mod death;
+mod egg;
 mod environment;
 #[cfg(test)]
 mod fake;
@@ -25,15 +26,15 @@ mod texts;
 mod trace;
 
 use body::Body;
-use chestcavity_shared::cavity::{SLOTS, organ};
+use chestcavity_shared::cavity::organ;
 use chestcavity_shared::config::Config;
 use chestcavity_shared::describe::{IDLE, Tone, describe};
 use chestcavity_shared::drops::Rng;
 use chestcavity_shared::food::Meal;
 use horizon_client::mod_api::{
-    AttackEntityEvent, BreakSpeedEvent, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
+    AttackEntityEvent, BreakSpeedEvent, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hand, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
     LivingIncomingDamageV3Event, LootDropsEvent, MenuClickedEvent, MenuClosedEvent, NativeCommand, NetFromClientEvent,
-    PerformCommandEvent, PlayerLoggedOutEvent, PlayerRespawnedEvent, PlayerTickEvent, RegisterCommandsEvent, ServerTickEvent,
+    PerformCommandEvent, PlayerLoggedOutEvent, PlayerRespawnedEvent, PlayerTickEvent, RegisterCommandsEvent, RightClickBlockV2Event, ServerTickEvent,
     ServerAboutToStartEvent, ServerTickPhase, Text, TooltipEvent, UseItemEvent, UseItemOnEvent,
 };
 use combat::Hit;
@@ -72,6 +73,8 @@ struct ChestCavity {
     dodges: Mutex<Vec<(u128, f32)>>,
     /// The bodies that panic at the next server tick: player, Speed level and ticks (see `combat`).
     panics: Mutex<Vec<(u128, u8, i32)>>,
+    /// The dragon eggs spent to grow a chest, and where, for the server tick to take away (see `egg`).
+    eggs: Mutex<Vec<(String, [i32; 3])>>,
     /// When each player last clicked a mob with the opener, in server ticks.
     mob_clicks: Mutex<HashMap<u128, u64>>,
     ticks: AtomicU64,
@@ -105,6 +108,7 @@ impl ChestCavity {
             hits: Mutex::new(Vec::new()),
             dodges: Mutex::new(Vec::new()),
             panics: Mutex::new(Vec::new()),
+            eggs: Mutex::new(Vec::new()),
             mob_clicks: Mutex::new(HashMap::new()),
             ticks: AtomicU64::new(0),
             mob_screens: Mutex::new(HashMap::new()),
@@ -249,10 +253,10 @@ impl Hooks for ChestCavity {
                 body.reset(host, uuid);
                 vec![msg("chestcavity.msg.reset").text()]
             }
-            Some("take") => match arg.and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=SLOTS).contains(n)) {
+            Some("take") => match arg.and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=body.cavity.slots.len()).contains(n)) {
                 Some(n) if body.cavity.slots[n - 1].is_none() => vec![msg("chestcavity.msg.slot_empty").plain_arg(n).text()],
                 Some(n) => vec![body.take_out(host, uuid, n - 1).unwrap_or_else(|| msg("chestcavity.msg.took").plain_arg(n)).text()],
-                None => vec![msg("chestcavity.msg.take_usage").plain_arg(SLOTS).text()],
+                None => vec![msg("chestcavity.msg.take_usage").plain_arg(body.cavity.slots.len()).text()],
             },
             Some("put") => vec![body.put_held(host, uuid).text()],
             Some(other) => vec![msg("chestcavity.msg.unknown_sub").plain_arg(other).text()],
@@ -284,6 +288,15 @@ impl Hooks for ChestCavity {
         Flow::Cancel
     }
 
+    /// The Chest Opener on the dragon egg grows the chest. Asked before the egg's own use, which would teleport it.
+    fn right_click_block_v2(&self, host: &mut dyn Host, event: &mut RightClickBlockV2Event) -> Flow {
+        let Some(p) = host.acting_player() else { return Flow::Continue };
+        if event.hand != Hand::Main || !host.held_stack(p.uuid).is_some_and(|held| &*held.item == OPENER) {
+            return Flow::Continue;
+        }
+        if self.egg_used(host, p.uuid, &p.dimension, event.pos) { Flow::Cancel } else { Flow::Continue }
+    }
+
     fn server_about_to_start(&self, host: &mut dyn Host, _event: &mut ServerAboutToStartEvent) {
         self.load_config(host);
     }
@@ -296,6 +309,7 @@ impl Hooks for ChestCavity {
             }
         }
         self.open_queued(host);
+        self.spend_eggs(host);
         self.run_abilities(host);
         self.run_combat(host);
     }
@@ -423,8 +437,8 @@ impl Hooks for ChestCavity {
 
     /// A new body, as after a death (or the one they had, with the settings that keep the chest cavity).
     fn player_respawned(&self, host: &mut dyn Host, event: &mut PlayerRespawnedEvent<'_>) {
-        let (uuid, keep) = (event.player, self.cfg().keep_chest_cavity);
-        self.with(host, uuid, |body, host| body.respawn(host, uuid, keep));
+        let (uuid, cfg) = (event.player, self.cfg());
+        self.with(host, uuid, |body, host| body.respawn(host, uuid, cfg.keep_chest_cavity, cfg.keep_grown_cavity));
     }
 
     fn player_logged_out(&self, _host: &mut dyn Host, event: &mut PlayerLoggedOutEvent<'_>) {

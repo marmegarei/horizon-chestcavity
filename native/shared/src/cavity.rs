@@ -1,9 +1,14 @@
-//! A chest cavity: 27 slots of organs and the scores they add up to, as
+//! A chest cavity: 27 slots of organs (36 once it has grown a fourth row) and the scores they add up to, as
 //! Chest Cavity's `ChestCavityUtil.evaluateChestCavity` counts them.
 use crate::organs::{KINDS, MOBS, ORGANS, PLAYER};
 use std::collections::BTreeMap;
 
+/// The slots of a cavity as it is born: three rows of nine.
 pub const SLOTS: usize = 27;
+/// The slots of one that has grown a fourth row (a player's, with the dragon egg).
+pub const GROWN: usize = 36;
+/// The most a saved cavity may say it has (six rows, the biggest chest menu).
+const MOST: usize = 54;
 
 /// An item with organ scores: one of the mods' organs, or a vanilla
 /// pseudo-organ (dirt, bone, ...).
@@ -111,6 +116,18 @@ impl Cavity {
         Cavity { slots }
     }
 
+    /// The same organs in a cavity of `n` slots: empty ones are added at the end, and what is past the new end is lost.
+    pub fn resized(mut self, n: usize) -> Self {
+        self.slots.resize(n, None);
+        self
+    }
+
+    /// The same cavity with its fourth row (a cavity that has it already is left as it is).
+    pub fn grown(self) -> Self {
+        let n = GROWN.max(self.slots.len());
+        self.resized(n)
+    }
+
     /// The organs that have no owner are born in the body of `owner`, but for the ones `universal` says fit any body.
     pub fn born(mut self, owner: u128, mut universal: impl FnMut() -> bool) -> Self {
         for slot in self.slots.iter_mut().flatten().filter(|s| s.owner.is_none()) {
@@ -183,9 +200,13 @@ impl Cavity {
         scores
     }
 
-    /// One line a slot, `<slot> <id> <count>` and the owner (32 hex digits) when it has one, for the mod's storage.
+    /// One line a slot, `<slot> <id> <count>` and the owner (32 hex digits) when it has one, for the mod's storage; and
+    /// `size <slots>` first when it is not a plain 27.
     pub fn to_text(&self) -> String {
         let mut out = String::new();
+        if self.slots.len() != SLOTS {
+            out += &format!("size {}\n", self.slots.len());
+        }
         for (i, s) in self.slots.iter().enumerate() {
             if let Some(s) = s {
                 out += &format!("{i} {} {}", s.id, s.count);
@@ -199,12 +220,17 @@ impl Cavity {
     }
 
     pub fn from_text(text: &str) -> Self {
-        let mut slots = vec![None; SLOTS];
+        let size = text
+            .lines()
+            .find_map(|l| l.strip_prefix("size ")?.trim().parse::<usize>().ok())
+            .filter(|n| (SLOTS..=MOST).contains(n) && n % 9 == 0)
+            .unwrap_or(SLOTS);
+        let mut slots = vec![None; size];
         for line in text.lines() {
             let mut w = line.split(' ');
             let (Some(i), Some(id), Some(n)) = (w.next(), w.next(), w.next()) else { continue };
             if let (Ok(i), Ok(count)) = (i.parse::<usize>(), n.parse()) {
-                if i < SLOTS {
+                if i < size {
                     let owner = w.next().and_then(|o| u128::from_str_radix(o, 16).ok());
                     slots[i] = Some(Slot::new(id, count).owned_by(owner));
                 }
@@ -248,6 +274,27 @@ mod tests {
         whole.welfare(kind);
         assert_eq!(whole, same);
         assert_ne!(before, cavity);
+    }
+
+    #[test]
+    fn a_cavity_can_grow_a_fourth_row_and_its_text_says_so() {
+        let plain = Cavity::of(player_kind());
+        assert_eq!(plain.slots.len(), SLOTS);
+        assert!(!plain.to_text().contains("size"), "a plain cavity is saved as it always was");
+        let grown = plain.clone().grown();
+        assert_eq!(grown.slots.len(), GROWN);
+        assert!(grown.slots[SLOTS..].iter().all(Option::is_none) && grown.slots[..SLOTS] == plain.slots[..]);
+        assert_eq!(grown.clone().grown(), grown, "growing twice is growing once");
+        let mut text = grown.to_text();
+        assert!(text.starts_with("size 36"), "{text}");
+        let mut with_organ = grown.clone();
+        with_organ.slots[30] = Some(Slot::new("chestcavity:silk_gland", 1));
+        text = with_organ.to_text();
+        assert_eq!(Cavity::from_text(&text), with_organ, "an organ in the fourth row comes back");
+        assert_eq!(Cavity::from_text("size 40\n3 chestcavity:heart 1\n").slots.len(), SLOTS, "a size that is not whole rows is no size");
+        assert_eq!(Cavity::from_text("size 99\n").slots.len(), SLOTS);
+        assert_eq!(Cavity::from_text("30 chestcavity:heart 1\n").slots[..].iter().flatten().count(), 0, "past a plain cavity's end there is nothing");
+        assert_eq!(grown.resized(SLOTS), plain, "shrinking loses the fourth row");
     }
 
     #[test]

@@ -10,6 +10,8 @@ pub struct Config {
     pub rejection_damage: f32,
     /// The chest cavity survives death (`KEEP_CHEST_CAVITY`).
     pub keep_chest_cavity: bool,
+    /// The fourth row a player's chest grows with the dragon egg is kept through death.
+    pub keep_grown_cavity: bool,
     /// Health at or below which a mob's chest can be opened, absolutely and as a share of its maximum.
     pub opener_absolute_health: f32,
     pub opener_fractional_health: f32,
@@ -28,6 +30,7 @@ impl Default for Config {
             rejection_rate: 600.0,
             rejection_damage: 2.0,
             keep_chest_cavity: false,
+            keep_grown_cavity: true,
             opener_absolute_health: 20.0,
             opener_fractional_health: 0.5,
             universal_donor_rate: 0.1,
@@ -43,6 +46,7 @@ pub const DOC: &[(&str, &str)] = &[
     ("rejection_rate", "ticks between rejections for one point of incompatibility"),
     ("rejection_damage", "damage of each rejection"),
     ("keep_chest_cavity", "the chest cavity survives death"),
+    ("keep_grown_cavity", "the fourth row a chest grows with the dragon egg is kept through death"),
     ("opener_absolute_health", "a mob with this much health or less can be opened"),
     ("opener_fractional_health", "a mob at this share of its maximum health or less can be opened"),
     ("universal_donor_rate", "chance that an organ of a mob's cavity fits any body"),
@@ -64,6 +68,7 @@ impl Config {
             match name {
                 "organ_rejection" => c.organ_rejection = flag.unwrap_or(c.organ_rejection),
                 "keep_chest_cavity" => c.keep_chest_cavity = flag.unwrap_or(c.keep_chest_cavity),
+                "keep_grown_cavity" => c.keep_grown_cavity = flag.unwrap_or(c.keep_grown_cavity),
                 "rejection_rate" => c.rejection_rate = number.filter(|n| *n > 0.0).unwrap_or(c.rejection_rate),
                 "rejection_damage" => c.rejection_damage = number.filter(|n| *n >= 0.0).unwrap_or(c.rejection_damage),
                 "opener_absolute_health" => c.opener_absolute_health = number.unwrap_or(c.opener_absolute_health),
@@ -82,6 +87,7 @@ impl Config {
         let value = |name: &str| match name {
             "organ_rejection" => self.organ_rejection.to_string(),
             "keep_chest_cavity" => self.keep_chest_cavity.to_string(),
+            "keep_grown_cavity" => self.keep_grown_cavity.to_string(),
             "rejection_rate" => self.rejection_rate.to_string(),
             "rejection_damage" => self.rejection_damage.to_string(),
             "opener_absolute_health" => self.opener_absolute_health.to_string(),
@@ -108,6 +114,7 @@ mod tests {
         let mut c = Config::default();
         assert_eq!(Config::parse(&c.render()), c);
         c.organ_rejection = false;
+        c.keep_grown_cavity = false;
         c.rejection_rate = 300.0;
         c.cooldown_scale = 0.5;
         assert_eq!(Config::parse(&c.render()), c);

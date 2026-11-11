@@ -1,8 +1,9 @@
-//! The chest screen, for any cavity (a player's or a mob's): 27 slots as a chest. Click an organ to take it
+//! The chest screen, for any cavity (a player's or a mob's): its slots as a chest, 27 or 36. Click an organ to take it
 //! out into the player's inventory, an organ of the player's below to put it in. The functions change a
 //! `Cavity` and the player's inventory only; whoever owns the cavity saves it when `changed` says so.
 use crate::texts::{Msg, item_name, msg};
-use chestcavity_shared::cavity::{Cavity, SLOTS, Slot, organ};
+use chestcavity_shared::cavity::{Cavity, Slot, organ};
+use chestcavity_shared::layout;
 use horizon_client::mod_api::{Host, ItemStack, Tag, Text};
 
 pub(crate) const EMPTY_SLOT: &str = "minecraft:gray_stained_glass_pane";
@@ -65,10 +66,11 @@ pub fn items(cavity: &Cavity) -> Vec<Option<ItemStack>> {
 /// A click on menu slot `slot` by player `uuid`.
 pub fn click(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, slot: i32) -> Click {
     let Ok(slot) = usize::try_from(slot) else { return Click::default() };
-    if slot < SLOTS {
+    let size = cavity.slots.len();
+    if slot < size {
         return take_out(host, uuid, cavity, slot);
     }
-    let held = inventory_slot(SLOTS, slot)
+    let held = inventory_slot(size, slot)
         .and_then(|from| host.player_stacks(uuid)?.get(from).cloned().flatten().map(|held| (from, held)));
     let Some((from, held)) = held else { return Click::default() };
     put_in(host, cavity, held, |host, held| host.take_stacks(uuid, &[(from, held.clone())]).is_ok())
@@ -85,13 +87,13 @@ pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) 
     Click::done()
 }
 
-/// Puts `held`, an organ of the player's, in the first empty slot; `remove` takes it from where it is.
+/// Puts `held`, an organ of the player's, in its place (`layout::place`); `remove` takes it from where it is.
 pub fn put_in(host: &mut dyn Host, cavity: &mut Cavity, held: ItemStack, remove: impl FnOnce(&mut dyn Host, &ItemStack) -> bool) -> Click {
     let Some(o) = organ(&held.item) else { return Click::said(msg("chestcavity.msg.not_organ").plain_arg(&held.item)) };
     if held.count > o.stack {
         return Click::said(msg("chestcavity.msg.max_stack").plain_arg(o.stack).arg(item_name(&o.id, o.name)));
     }
-    let Some(i) = cavity.slots.iter().position(Option::is_none) else {
+    let Some(i) = layout::place(cavity, &held.item) else {
         return Click::said(msg("chestcavity.msg.full"));
     };
     if !remove(host, &held) {

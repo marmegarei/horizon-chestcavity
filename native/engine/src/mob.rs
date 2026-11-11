@@ -96,7 +96,7 @@ pub fn title(mob: &str) -> Text {
 /// Opens the mob's server menu for player `uuid`: its window id; none for the window's own player,
 /// whom the game's menus don't reach.
 pub fn open_menu(host: &mut dyn Host, uuid: u128, cavity: &Cavity, mob: &str) -> Option<i32> {
-    host.open_menu(uuid, 3, title(mob), screen::items(cavity))
+    host.open_menu(uuid, (cavity.slots.len() / 9) as u8, title(mob), screen::items(cavity))
 }
 
 /// Changes the mob's cavity with `f`, keeping it when `f` says it changed: the cavity as it is now and

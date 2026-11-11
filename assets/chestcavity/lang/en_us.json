@@ -468,6 +468,8 @@
   "chestcavity.msg.not_organ": "%s is not an organ",
   "chestcavity.msg.max_stack": "Put in at most %s %s at a time",
   "chestcavity.msg.full": "All slots are taken: take an organ out first",
+  "chestcavity.msg.grown": "Your chest cavity grew a fourth row",
+  "chestcavity.msg.already_grown": "Your chest cavity already has its fourth row",
   "chestcavity.msg.stale": "That stack changed",
   "chestcavity.msg.mob_none": "%s has no chest cavity",
   "chestcavity.msg.mob_gone": "%s is gone, or the game keeps no cavity for it",

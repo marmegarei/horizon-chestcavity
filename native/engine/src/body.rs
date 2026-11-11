@@ -7,7 +7,8 @@ use crate::texts::{Msg, item_name, msg};
 use crate::teleport;
 use chestcavity_shared::breath::Lungs;
 use chestcavity_shared::config::Config;
-use chestcavity_shared::cavity::{Cavity, Scores, Slot, organ, player_kind};
+use chestcavity_shared::cavity::{Cavity, GROWN, SLOTS, Scores, Slot, organ, player_kind};
+use chestcavity_shared::layout;
 use chestcavity_shared::damage::Resist;
 use chestcavity_shared::drops::Rng;
 use chestcavity_shared::effects::{self, Action, Env, Progress};
@@ -118,10 +119,20 @@ impl Body {
         self.incompat = self.cavity.incompatibility(self.uuid);
     }
 
-    /// A new body, as after a death.
+    /// A new body, as after a death; it keeps the size its chest has.
     pub fn reset(&mut self, host: &mut dyn Host, uuid: u128) {
-        self.cavity = Cavity::of(player_kind()).born(uuid, || false);
+        self.cavity = Cavity::of(player_kind()).born(uuid, || false).resized(self.cavity.slots.len());
         self.changed(host, uuid);
+    }
+
+    /// The chest grows its fourth row (the dragon egg): whether it was not grown already.
+    pub fn grow(&mut self, host: &mut dyn Host, uuid: u128) -> bool {
+        if self.cavity.slots.len() >= GROWN {
+            return false;
+        }
+        self.cavity = self.cavity.clone().grown();
+        self.changed(host, uuid);
+        true
     }
 
     /// The body dies: what is not its own leaves it (`dropUnboundOrgans`), and is returned to be dropped. A body that keeps its
@@ -137,10 +148,11 @@ impl Body {
         gone
     }
 
-    /// The body after a death: a new one, or, when the settings keep the chest cavity, the one it had with the rotten
-    /// organs it lacked (`insertWelfareOrgans`). What the dying did not drop (the game keeps the inventory, and the loot hook
-    /// is not told) goes back into the player's hands rather than being lost.
-    pub fn respawn(&mut self, host: &mut dyn Host, uuid: u128, keep: bool) {
+    /// The body after a death: a new one, or, when the settings keep the chest cavity (`keep`), the one it had with the rotten
+    /// organs it lacked (`insertWelfareOrgans`). A new one keeps the fourth row of a grown chest when `keep_size` says so.
+    /// What the dying did not drop (the game keeps the inventory, and the loot hook is not told) goes back into the
+    /// player's hands rather than being lost.
+    pub fn respawn(&mut self, host: &mut dyn Host, uuid: u128, keep: bool, keep_size: bool) {
         if keep {
             self.cavity.welfare(player_kind());
             self.changed(host, uuid);
@@ -148,6 +160,9 @@ impl Body {
         }
         for slot in self.cavity.drop_unbound(uuid) {
             host.give_stack(uuid, screen::organ_stack(&slot.id, slot.count, slot.owner));
+        }
+        if !keep_size {
+            self.cavity = self.cavity.clone().resized(SLOTS);
         }
         self.reset(host, uuid);
     }
@@ -172,9 +187,14 @@ impl Body {
         }
     }
 
-    /// Opens the screen: the 27 slots as a chest. Click an organ to take it out, an organ of yours below to put it in.
+    /// Opens the screen: the slots as a chest, with each organ in its place. Click an organ to take it out, an organ of
+    /// yours below to put it in.
     pub fn open(&mut self, host: &mut dyn Host, uuid: u128) -> bool {
-        self.menu = host.open_menu(uuid, 3, msg("chestcavity.title.own").text(), screen::items(&self.cavity));
+        if layout::organize(&mut self.cavity) {
+            self.changed(host, uuid);
+        }
+        let rows = (self.cavity.slots.len() / 9) as u8;
+        self.menu = host.open_menu(uuid, rows, msg("chestcavity.title.own").text(), screen::items(&self.cavity));
         self.menu.is_some()
     }
 

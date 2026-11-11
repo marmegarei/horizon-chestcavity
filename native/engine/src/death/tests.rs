@@ -63,7 +63,7 @@ fn a_body_that_keeps_its_cavity_keeps_it_and_gets_the_rotten_organs_it_lacks() {
     cc.player_dropped(&mut game, ME, &mut drops);
     assert!(drops.is_empty(), "nothing leaves a body that keeps its cavity");
 
-    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, true));
+    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, true, true));
     let (rotten, still) = cc.with(&mut game, ME, |body, _| {
         (body.cavity.slots.iter().flatten().any(|s| s.id == "chestcavity:rotten_heart"), body.cavity.slots[liver].is_some())
     });
@@ -77,7 +77,7 @@ fn what_the_game_kept_of_a_dying_player_goes_back_to_them_and_the_body_starts_ov
     // handed back at the respawn rather than lost.
     let (cc, mut game) = world();
     let liver = with_a_strangers_liver(&cc, &mut game);
-    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, false));
+    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, false, true));
     assert_eq!(game.inventory[0].as_ref().map(|s| &*s.item), Some("chestcavity:liver"));
     assert_eq!(game.inventory[0].as_ref().and_then(owner_of), Some(99));
     let fresh = cc.with(&mut game, ME, |body, _| body.cavity.clone());
@@ -161,4 +161,19 @@ fn a_wither_whose_star_was_taken_out_drops_none() {
     let mut drops = star();
     cc.mob_dropped(&mut game, WITHER, "minecraft:wither", Some(ME), true, &mut drops);
     assert!(drops.iter().all(|d| &*d.item != "minecraft:nether_star"), "{:?}", drops.iter().map(|s| s.item.to_string()).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_grown_chest_keeps_its_fourth_row_through_death_unless_the_settings_say_otherwise() {
+    let (cc, mut game) = world();
+    cc.with(&mut game, ME, |body, host| {
+        body.grow(host, ME);
+        body.cavity.slots[30] = Some(Slot::new("chestcavity:silk_gland", 1).owned_by(Some(ME)));
+    });
+    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, false, true));
+    let (len, organ) = cc.with(&mut game, ME, |body, _| (body.cavity.slots.len(), body.cavity.slots[30].clone()));
+    assert_eq!(len, 36, "the row is an upgrade of the player's");
+    assert!(organ.is_none(), "the organs that were in it are lost like the rest of the body's own");
+    cc.with(&mut game, ME, |body, host| body.respawn(host, ME, false, false));
+    assert_eq!(cc.with(&mut game, ME, |body, _| body.cavity.slots.len()), 27, "unless the settings take it back");
 }

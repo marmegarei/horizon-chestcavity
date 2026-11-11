@@ -1,4 +1,4 @@
-# Chest Cavity para o Horizon: o que falta (versão 0.9.0)
+# Chest Cavity para o Horizon: o que falta (versão 0.10.0)
 
 Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest Cavity Beyond e o Astro Adds, lidos em `vendor/`. Nada daqui foi ainda testado dentro do jogo: o que está em "Feito" compila, passa os testes e usa hooks que a documentação do Horizon descreve, mas só o jogo diz se se comporta como deve.
 
@@ -6,11 +6,13 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 
 - **Línguas**: todo o texto do mod (nomes dos itens, descrições dos órgãos, mensagens, comandos) está em inglês e português (`pt_pt` e `pt_br`), conforme a língua do Minecraft; as outras línguas veem inglês.
 - **Abrir o peito**: no ar abre o teu; com botão direito num mob abre o dele (órgãos próprios de cada espécie, guardados no mob). Custa 4 de dano a quem é aberto, salvo `ease_of_access` (as portas e alçapões contam como órgãos). Um mob só se abre se estiver fraco (vida ≤ 20 ou ≤ 50 % da máxima) e sem peitoral; `ease_of_access` dispensa só o estar fraco. Em criativo o jogo não deixa magoar o jogador.
+- **Layout do peito**: cada tipo de órgão tem as suas ranhuras, as da cavidade humana (coração ao meio, pulmões ao lado, intestinos em baixo...). Um órgão posto no peito vai para a sua parte; se estiver cheia, ocupa a ranhura livre da 3.ª fila (ou a 4.ª fila) e, sem essas, qualquer ranhura livre. Ao abrir o teu peito os órgãos fora do sítio voltam para a sua parte, quando há lugar.
+- **Ovo do dragão**: o Chest Opener usado no ovo (mão principal) passa a tua cavidade a 4x9 e gasta o ovo; a 4.ª fila não tem partes, serve para o que quiseres. Mantém-se ao morrer (chave `keep_grown_cavity`). Com a cavidade já aumentada, o ovo fica.
 - **Mobs**: o que se tira do peito de um mob muda o mob. Sem coração sangra até morrer, sem espinha não se mexe, sem pulmões afoga-se, sem rins envenena-se; vida, força e velocidade seguem os músculos e o coração. O creeper sem o apêndice não explode, o wither sem a estrela não a larga.
 - **Rejeição e compatibilidade**: cada órgão nasce no corpo de quem o tem (o uuid do jogador ou do mob) e guarda-o; noutro corpo é rejeitado (2 de dano a cada 600/n ticks para n órgãos alheios, com o efeito visível **Rejeição de Órgãos** a mostrar o tempo até ao próximo golpe). Os órgãos que um mob larga de saque servem a qualquer corpo, e 10 % dos órgãos do peito de um mob são dadores universais (escolhidos pelo uuid do mob, sempre os mesmos). O tooltip diz se o órgão serve só o corpo de onde veio.
 - **Morte**: o jogador larga os órgãos que não são seus (os próprios perdem-se com o corpo e o peito volta ao normal ao reaparecer); com `keep_chest_cavity` o peito mantém-se e recebe coração, pulmão, espinha ou carne podre se lhe faltarem. Com `keepInventory` o jogo não avisa o mod da queda, por isso os órgãos alheios voltam ao inventário ao reaparecer. Um mob aberto larga só o que não é seu, e a tabela de saque já não lhe junta órgãos.
 - **Saque**: o nível de Looting da arma conta (`0,1 + 0,04 × nível`, vezes o multiplicador de cada espécie; chefes largam sempre 3 ou mais). Um **cutelo** (os seis do mod) multiplica o Looting por 10 e desfaz os órgãos largados pelas receitas de salvamento do original (carne, farinha de osso, pólvora, ferro, enchidos). Os mesmos salvamentos existem como receitas de crafting (`required` órgãos juntos); o cutelo de netherite faz-se na bancada de ferraria.
-- **Configuração** (`config/chestcavity.json`, criado ao abrir o mundo): `organ_rejection`, `rejection_rate`, `rejection_damage`, `keep_chest_cavity`, `opener_absolute_health`, `opener_fractional_health`, `universal_donor_rate`, `looting_boost`, `cooldown_scale`.
+- **Configuração** (`config/chestcavity.json`, criado ao abrir o mundo): `organ_rejection`, `rejection_rate`, `rejection_damage`, `keep_chest_cavity`, `keep_grown_cavity`, `opener_absolute_health`, `opener_fractional_health`, `universal_donor_rate`, `looting_boost`, `cooldown_scale`.
 - **Comer**: digestão, nutrição, carnívoro/herbívoro, comida podre, resistência (cansaço) e metabolismo mais rápido. Náusea e fome com estômago ou intestinos maus. Intestino de ferro (comida sem efeitos maus) e rotgut (a comida podre deixa de dar Fome).
 - **Poções**: desintoxicação (efeitos maus duram mais ou menos), purga de bónus e ossos secos contra o Wither.
 - **Astro, órgãos que mexem em órgãos**: *regrowth* a cada 400 ticks (enche as ranhuras vazias com o órgão do tipo ou, uma vez em quatro, um tumor; custa fome), autofagia e autofagia tumoral a cada 450 (come comida do peito: alimenta quem tem fome e cura 1 de vida por unidade a quem está cheio; a pilha que acaba deixa um tumor), caça-tumores a cada 250 e infeção sculk a cada 500. Só nos jogadores.
@@ -60,7 +62,7 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - Estado "aberta" e cavidade preguiçosa: o original só aplica os efeitos depois de a cavidade ser aberta. Aqui o jogador tem sempre a sua, e um mob que nunca foi aberto não muda.
 - Os mixins do Beyond que mudam a IA de Enderman, Shulker, Blaze, Ghast, Breeze, Warden, Guardian, Llama, golem de neve, aranha de caverna, golem de ferro e strider: o Horizon não expõe os objetivos dos mobs.
 - Ranhuras proibidas por tipo (o importador ignora `forbiddenSlots`). Os órgãos excecionais por tipo (o tronco do creeper vale vida, defesa e nervos) já estão.
-- Tamanhos de cavidade do Beyond (27 a 54 ranhuras), conversão de órgãos ao transformar um mob.
+- Tamanhos de cavidade do Beyond (27 a 54 ranhuras; o port só tem 27 e os 36 do ovo do dragão, só para jogadores), conversão de órgãos ao transformar um mob.
 - Partes do dragão: o clique numa parte devia abrir o dragão.
 - Abrir com um dispensador (Astro).
 
@@ -75,12 +77,14 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 - Receita da glândula de veneno (glândula + poção) e as glândulas de veneno e de alquimia a guardar efeitos: o Horizon não dá a grelha de crafting a um mod.
 - Analisador biológico e tooltips detalhados com SHIFT (Beyond); as receitas do Beyond que usam as suas etiquetas (`bone_meal_rib`, `bone_meal_spine`, `rotten`, jukebox portátil).
 - Os valores de comida do original (as comidas usam as da carne vanilla).
-- Da configuração só estão as nove chaves acima: `HEART_HP`, `BONE_DEFENSE` e os valores de cada órgão estão fixos no código.
+- Da configuração só estão as dez chaves acima: `HEART_HP`, `BONE_DEFENSE` e os valores de cada órgão estão fixos no código.
 - Comandos do Beyond (`/chestcavity <alvos> row_3..row_6`, `resetorgans`, `attributes`).
 - Avanços de receitas.
 - Tipos de dano `cc_heartbleed`, `cc_organ_rejection`, `open_chest` e `organ_loss` (o port usa os genéricos).
 
 ## Aproximações (existem, mas não são iguais)
+
+- Layout do peito: só se arruma o peito do jogador ao abrir (não o dos mobs) e nunca se trocam órgãos de sítio; o regrowth do Astro não enche a 4.ª fila.
 
 - Autofagia: a comida do peito dá a fome e a saturação da tabela do Astro, passadas pelo estômago e pelos intestinos, mas não os efeitos do próprio alimento; não bebe o balde de leite (o balde não é órgão aqui).
 - Respiração: não distingue correr nem chuva (o original divide a recuperação por 4 a correr e soma a respiração aquática à chuva).
