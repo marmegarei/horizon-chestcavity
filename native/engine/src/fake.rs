@@ -1,6 +1,6 @@
 //! The game as far as the engine asks of it, for the tests: a player's data, attributes, inventory,
 //! commands, effects, the screen they have open, and the attachments of mobs.
-use horizon_client::mod_api::{AttachmentError, Attachments, Holder, Host, ItemStack, NativeEffect, Tag, Text};
+use horizon_client::mod_api::{AttachmentError, Attachments, Compound, Holder, Host, ItemStack, NativeEffect, Tag, Text};
 use std::collections::HashMap;
 
 pub struct Fake {
@@ -8,6 +8,8 @@ pub struct Fake {
     pub bases: Vec<(String, f64)>,
     pub inventory: Vec<Option<ItemStack>>,
     pub commands: Vec<String>,
+    /// (dimension, target, amount, damage type, attacker) of each hurt the engine asked for.
+    pub hurts: Vec<(String, u32, f32, String, Option<u32>)>,
     pub effects: Vec<NativeEffect>,
     pub menu: Option<Vec<Option<ItemStack>>>,
     pub menu_title: Option<String>,
@@ -18,6 +20,15 @@ pub struct Fake {
     pub said: Vec<String>,
     /// The mobs of the world, by entity id.
     pub mobs: HashMap<u32, Attachments>,
+    /// The food bar of the player, and every status (health, food) the engine set.
+    pub food: Option<(i32, f32, f32)>,
+    pub statuses: Vec<(Option<f32>, Option<(i32, f32, f32)>)>,
+    /// What was spawned: kind, position, data.
+    pub summons: Vec<(String, [f64; 3], Compound)>,
+    /// The blocks that are not air, by position.
+    pub blocks: HashMap<[i32; 3], String>,
+    /// Whether the engine let the player fly, each time it said so.
+    pub flights: Vec<bool>,
 }
 
 impl Fake {
@@ -27,6 +38,7 @@ impl Fake {
             bases: Vec::new(),
             inventory: vec![None; 36],
             commands: Vec::new(),
+            hurts: Vec::new(),
             effects: Vec::new(),
             menu: None,
             menu_title: None,
@@ -34,6 +46,11 @@ impl Fake {
             screens: Vec::new(),
             said: Vec::new(),
             mobs: HashMap::new(),
+            food: None,
+            statuses: Vec::new(),
+            summons: Vec::new(),
+            blocks: HashMap::new(),
+            flights: Vec::new(),
         }
     }
 
@@ -126,5 +143,36 @@ impl Host for Fake {
     fn run_command(&mut self, line: &str) -> bool {
         self.commands.push(line.to_string());
         true
+    }
+    fn hurt_entity(&mut self, dimension: &str, target: u32, amount: f32, damage_type: &str, attacker: Option<u32>) -> bool {
+        self.hurts.push((dimension.into(), target, amount, damage_type.into(), attacker));
+        true
+    }
+    fn player_food(&self, _: u128) -> Option<(i32, f32, f32)> {
+        self.food
+    }
+    fn set_player_status(&mut self, _: u128, health: Option<f32>, food: Option<(i32, f32, f32)>, _: Option<(i32, f32, i32)>) -> bool {
+        self.statuses.push((health, food));
+        if food.is_some() {
+            self.food = food;
+        }
+        true
+    }
+    fn summon(&mut self, _: &str, kind: &str, pos: [f64; 3], nbt: Compound) -> Option<u32> {
+        self.summons.push((kind.to_string(), pos, nbt));
+        Some(self.summons.len() as u32)
+    }
+    fn block(&self, pos: [i32; 3]) -> String {
+        self.blocks.get(&pos).cloned().unwrap_or_else(|| "minecraft:air".to_string())
+    }
+    fn play_sound_to(&mut self, _: u128, _: &str, _: &str, _: Option<[f64; 3]>, _: f32, _: f32) -> bool {
+        true
+    }
+    fn set_flight(&mut self, _: u128, allow: bool, _: bool) -> bool {
+        self.flights.push(allow);
+        true
+    }
+    fn config_dir(&self) -> Result<std::path::PathBuf, String> {
+        Err("the tests have no config folder".into())
     }
 }

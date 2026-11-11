@@ -1,10 +1,17 @@
 //! A player's body: its cavity, what the organs do to them, and the screen
 //! that edits it. Everything goes through `Host` with the player's UUID, so a
 //! test double can stand in for the game.
+use crate::opening::Player;
 use crate::screen::{self, Click};
+use crate::teleport;
+use chestcavity_shared::breath::Lungs;
 use chestcavity_shared::cavity::{Cavity, Scores, organ, player_kind};
-use chestcavity_shared::effects::{self, Action};
+use chestcavity_shared::damage::Resist;
+use chestcavity_shared::drops::Rng;
+use chestcavity_shared::effects::{self, Action, Env, Progress};
+use chestcavity_shared::food::Meal;
 use horizon_client::mod_api::{Host, ItemStack, NativeEffect, Tag, Text};
+use std::collections::HashMap;
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
@@ -14,11 +21,22 @@ pub struct Body {
     pub cavity: Cavity,
     pub normal: Scores,
     pub scores: Scores,
-    /// How long the heart has been missing, in seconds.
-    pub bleed: u32,
+    /// What the organs keep count of between beats.
+    pub progress: Progress,
     pub ticks: u64,
     /// The window id of the screen they have open.
     pub menu: Option<i32>,
+    /// The last meal eaten and the tick it was; the food bar (level, saturation, exhaustion) as it was last tick.
+    pub meal: Option<(Meal, u64)>,
+    pub food: Option<(i32, f32, f32)>,
+    /// What the lungs and the bones do, when they are not the normal ones'; the air the lungs could not count whole.
+    pub lungs: Option<Lungs>,
+    pub resist: Resist,
+    pub air: f32,
+    /// The tick (of `ticks`) each ability rests until.
+    pub rests: HashMap<&'static str, u64>,
+    /// Whether it has been let fly because of its organs.
+    pub wings: bool,
 }
 
 impl Body {
@@ -38,8 +56,30 @@ impl Body {
     }
 
     pub fn of(cavity: Cavity) -> Body {
-        let kind = player_kind();
-        Body { scores: cavity.scores(kind), cavity, normal: Cavity::of(kind).scores(kind), bleed: 0, ticks: 0, menu: None }
+        let mut body = Body {
+            scores: Scores::new(),
+            cavity,
+            normal: Cavity::of(player_kind()).scores(player_kind()),
+            progress: Progress::default(),
+            ticks: 0,
+            menu: None,
+            meal: None,
+            food: None,
+            lungs: None,
+            resist: Resist::default(),
+            air: 0.0,
+            rests: HashMap::new(),
+            wings: false,
+        };
+        body.rescore();
+        body
+    }
+
+    /// The scores, and what the hooks without a `Host` read, from the cavity.
+    fn rescore(&mut self) {
+        self.scores = self.cavity.scores(player_kind());
+        self.lungs = Lungs::differing(&self.scores, &self.normal);
+        self.resist = Resist::of(&self.scores, &self.normal);
     }
 
     /// A new body, as after a death.
@@ -56,7 +96,7 @@ impl Body {
 
     /// The cavity changed: new scores, attributes, saved state and screen.
     pub fn changed(&mut self, host: &mut dyn Host, uuid: u128) {
-        self.scores = self.cavity.scores(player_kind());
+        self.rescore();
         self.apply(host, uuid);
         let mut data = host.player_persistent_data(uuid).unwrap_or_else(|| Tag::compound(Vec::<(&str, Tag)>::new()));
         if let Tag::Compound(map) = &mut data {
@@ -110,18 +150,24 @@ impl Body {
             .unwrap_or_else(|| format!("Meteste {} na cavidade", organ(&held.item).map_or(held.item.as_ref(), |o| o.name)))
     }
 
-    /// Once a second: what the organs do over time. `eyes` is the block at the player's eyes.
-    pub fn beat(&mut self, host: &mut dyn Host, uuid: u128, name: &str, eyes: &str) {
+    /// Once a second: what the organs do over time.
+    pub fn beat(&mut self, host: &mut dyn Host, who: &Player, env: &Env, rng: &mut Rng) {
         let seconds = self.ticks / 20;
-        let in_water = eyes.starts_with("minecraft:water");
-        for action in effects::periodic(&self.scores, &self.normal, seconds, &mut self.bleed, in_water) {
+        self.mend(host, who);
+        for action in effects::periodic(&self.scores, &self.normal, seconds, &mut self.progress, env) {
             match action {
                 Action::Damage { amount, kind } => {
-                    host.run_command(&format!("damage {name} {amount} {kind}"));
+                    if let Ok(target) = u32::try_from(who.entity) {
+                        host.hurt_entity(&who.dimension, target, amount, kind, None);
+                    }
                 }
-                Action::Effect { id, seconds, amplifier } => {
-                    let effect = NativeEffect { id: id.into(), amplifier: amplifier as u8, duration: seconds as i32 * 20, ambient: false, particles: false };
-                    host.add_effect(uuid, &effect);
+                Action::Effect { id, ticks, amplifier } => {
+                    let effect = NativeEffect { id: id.into(), amplifier: amplifier as u8, duration: ticks as i32, ambient: false, particles: false };
+                    host.add_effect(who.uuid, &effect);
+                }
+                Action::Nourish { hunger, saturation, heal } => self.nourish(host, who, hunger, saturation, heal),
+                Action::Teleport { range } => {
+                    teleport::randomly(host, who, f64::from(range), rng);
                 }
             }
         }

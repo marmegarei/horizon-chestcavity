@@ -12,12 +12,12 @@ const ATTRIBUTES: &[(&str, &str, f64, bool, f64)] = &[
     ("nerves", "minecraft:attack_speed", 4.0, true, 0.1), // NERVES_HASTE
     ("nerves", "minecraft:block_break_speed", 1.0, true, 0.1),
     ("luck", "minecraft:luck", 0.0, false, 0.1), // APPENDIX_LUCK
-    // ponytail: Chest Cavity cuts damage by 0.5^(d/4); armor is the nearest attribute.
-    ("defense", "minecraft:armor", 0.0, false, 2.0),
     ("leaping", "minecraft:jump_strength", 0.42, true, 0.25), // LEAPING_POWER
     ("swim_speed", "minecraft:water_movement_efficiency", 0.0, false, 1.0 / 8.0), // SWIMSPEED_FACTOR
-    ("knockback_resistant", "minecraft:knockback_resistance", 0.0, false, 0.25),
-    ("breath_capacity", "minecraft:oxygen_bonus", 0.0, false, 1.0),
+    ("knockback_resistant", "minecraft:knockback_resistance", 0.0, false, 0.1), // KNOCKBACK_RESISTANCE per point
+    ("knockback_resistance", "minecraft:knockback_resistance", 0.0, false, 1.0), // Beyond: added as it is
+    ("block_interaction_range", "minecraft:block_interaction_range", 4.5, false, 1.0),
+    ("entity_interaction_range", "minecraft:entity_interaction_range", 3.0, false, 1.0),
 ];
 
 /// How far one point of `score` moves its attribute (the table above), for describing an organ.
@@ -25,17 +25,26 @@ pub fn rate(score: &str) -> Option<f64> {
     ATTRIBUTES.iter().find(|a| a.0 == score).map(|a| a.4)
 }
 
+/// `LIGHTWIEGHT_FACTOR`: how much one point of lightness takes off gravity (and one of heaviness adds).
+const LIGHTWEIGHT: f64 = 0.25;
+
 /// The base value of every attribute the organs touch for `now` against the
-/// body's `normal` scores, in the order to set them (a later entry for the
-/// same attribute wins). A normal body gets vanilla's bases back.
+/// body's `normal` scores, in the order to set them. Scores that move the same attribute add up.
+/// A normal body gets vanilla's bases back.
 pub fn attribute_bases(now: &Scores, normal: &Scores) -> Vec<(&'static str, f64)> {
-    let mut out: Vec<(&'static str, f64)> = ATTRIBUTES
-        .iter()
-        .map(|&(score, attr, vanilla, multiplies, per)| {
-            let d = f64::from(get(now, score) - get(normal, score)) * per;
-            (attr, if multiplies { vanilla * (1.0 + d) } else { vanilla + d })
-        })
-        .collect();
+    // (attribute, vanilla base, multiplies the base, what the scores add up to)
+    let mut sums: Vec<(&'static str, f64, bool, f64)> = Vec::new();
+    for &(score, attr, vanilla, multiplies, per) in ATTRIBUTES {
+        let d = f64::from(get(now, score) - get(normal, score)) * per;
+        match sums.iter_mut().find(|e| e.0 == attr) {
+            Some(e) => e.3 += d,
+            None => sums.push((attr, vanilla, multiplies, d)),
+        }
+    }
+    let mut out: Vec<_> = sums.into_iter().map(|(attr, vanilla, multiplies, d)| (attr, if multiplies { vanilla * (1.0 + d) } else { vanilla + d })).collect();
+    // Light organs: less gravity; heavy ones: more (`applyLightweightToGravity`).
+    let light = f64::from(get(now, "lightweight") - get(normal, "lightweight"));
+    out.push(("minecraft:gravity", if light > 0.0 { 0.08 / (1.0 + light * LIGHTWEIGHT) } else { 0.08 * (1.0 - light * LIGHTWEIGHT) }));
     // No spine: no moving at all.
     if get(now, "nerves") <= 0.0 {
         out.push(("minecraft:movement_speed", 0.0));
@@ -46,48 +55,92 @@ pub fn attribute_bases(now: &Scores, normal: &Scores) -> Vec<(&'static str, f64)
 /// Something an organ does to the body on the second's beat.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
-    /// `kind` is a damage type id (`minecraft:generic`, `minecraft:drown`).
+    /// `kind` is a damage type id (`minecraft:generic`, `minecraft:magic`).
     Damage { amount: f32, kind: &'static str },
-    Effect { id: &'static str, seconds: u32, amplifier: u32 },
+    Effect { id: &'static str, ticks: u32, amplifier: u32 },
+    /// Food if the body isn't full, else saturation, else health.
+    Nourish { hunger: i32, saturation: f32, heal: f32 },
+    /// Somewhere else at random, at most `range` blocks away.
+    Teleport { range: f32 },
 }
 
-/// What the organs do over time, called every second with the seconds so
-/// far; `bleed` is how long the heart has been missing and `in_water` says
-/// whether the head is in water.
-pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, bleed: &mut u32, in_water: bool) -> Vec<Action> {
+/// Where the body is, as far as its organs care.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Env {
+    /// The light at its head, 0 to 15 (the brighter of the block's and the sky's).
+    pub light: u8,
+    /// Its body is in water, or rain falls on it.
+    pub wet: bool,
+    /// Its head is under water.
+    pub submerged: bool,
+    /// An End Crystal is within reach of the body.
+    pub crystal: bool,
+}
+
+/// What the organs keep count of between beats.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Progress {
+    /// Seconds the heart has been missing.
+    pub bleed: u32,
+    /// How much light the leaves have taken in since the last meal of it.
+    pub light: i32,
+    /// Ticks until water hurts again.
+    pub dry: i32,
+}
+
+/// `PHOTOSYNTHESIS_FREQUENCY` (50) ticks of 8 leaves in full light win one step.
+const PHOTOSYNTHESIS_STEP: i32 = 50 * 8 * 15;
+/// How long water spares a body after it hurt (`WATER_VULNERABILITY`, 260 ticks at 1).
+const WATER_SPARE: f32 = 260.0;
+
+/// What the organs do over time, called every second with the seconds so far. (Lungs, stomach and intestines work
+/// when breathing and eating, not here.)
+pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, progress: &mut Progress, env: &Env) -> Vec<Action> {
     let mut out = Vec::new();
     // Heartbleed (HEARTBLEED_RATE 20 ticks): damage that grows each second.
     if get(now, "health") <= 0.0 {
-        *bleed += 1;
-        out.push(Action::Damage { amount: *bleed as f32, kind: "minecraft:generic" });
+        progress.bleed += 1;
+        out.push(Action::Damage { amount: progress.bleed as f32, kind: "minecraft:generic" });
     } else {
-        *bleed = 0;
+        progress.bleed = 0;
     }
-    // Kidneys (KIDNEY_RATE 60 ticks): less filtration than normal lets poison in.
-    let filtration = get(now, "filtration");
-    if seconds % 3 == 0 && filtration < get(normal, "filtration") {
-        let amplifier = u32::from(filtration <= 0.0);
-        out.push(Action::Effect { id: "minecraft:poison", seconds: 4, amplifier });
-    }
-    // No lungs: air doesn't come back, so out of water the body drowns.
-    if get(now, "breath_recovery") <= 0.0 && get(now, "water_breath") <= 0.0 && !in_water {
-        out.push(Action::Damage { amount: 2.0, kind: "minecraft:drown" });
-    }
-    // ponytail: Chest Cavity applies these when eating; here they tick.
-    if seconds % 3 == 0 && get(now, "digestion") < 0.0 {
-        out.push(Action::Effect { id: "minecraft:nausea", seconds: 6, amplifier: 0 });
-    }
-    if seconds % 3 == 0 && get(now, "nutrition") < 0.0 {
-        out.push(Action::Effect { id: "minecraft:hunger", seconds: 4, amplifier: 0 });
-    }
-    for (score, id) in [
-        ("water_breath", "minecraft:water_breathing"),
-        ("fire_resistant", "minecraft:fire_resistance"),
-        ("glowing", "minecraft:glowing"),
-    ] {
-        if get(now, score) > get(normal, score) {
-            out.push(Action::Effect { id, seconds: 3, amplifier: 0 });
+    // Kidneys (KIDNEY_RATE 60 ticks): filtering less than normal lets poison in, for longer the less it filters.
+    let wanted = get(normal, "filtration");
+    if seconds % 3 == 0 && wanted > 0.0 {
+        let ratio = get(now, "filtration") / wanted;
+        if ratio < 1.0 {
+            out.push(Action::Effect { id: "minecraft:poison", ticks: ((48.0 * (1.0 - ratio)) as u32).max(1), amplifier: 0 });
         }
+    }
+    // Glowing organs (TickGlowing): the body shines through walls.
+    if get(now, "glowing") > 0.0 {
+        out.push(Action::Effect { id: "minecraft:glowing", ticks: 200, amplifier: 0 });
+    }
+    // Leaves (TickPhotosynthesis): light wins food, then saturation, then health.
+    let leaves = get(now, "photosynthesis") - get(normal, "photosynthesis");
+    if leaves > 0.0 {
+        progress.light += (leaves * f32::from(env.light)) as i32 * 20;
+        if progress.light > PHOTOSYNTHESIS_STEP {
+            progress.light = 0;
+            out.push(Action::Nourish { hunger: 1, saturation: 1.0, heal: 1.0 });
+        }
+    }
+    // Crystals (TickCrystalsynthesis): an End Crystal in reach feeds the body twice a second, then heals it.
+    let crystal = get(now, "crystalsynthesis");
+    if crystal > 0.0 && env.crystal {
+        out.push(Action::Nourish { hunger: if crystal >= 5.0 { 2 } else { 1 }, saturation: crystal / 5.0, heal: crystal * 2.0 / 5.0 });
+    }
+    // Water allergy (TickHydroallergenic): a splash hurts a little, a dive a lot, then the body is spared a while.
+    let allergy = get(now, "hydroallergenic");
+    progress.dry = (progress.dry - 20).max(0);
+    if allergy > 0.0 && progress.dry == 0 && (env.submerged || env.wet) {
+        out.push(Action::Damage { amount: if env.submerged { 10.0 } else { 1.0 }, kind: "minecraft:magic" });
+        progress.dry = (WATER_SPARE / allergy) as i32;
+    }
+    // Water fear (TickHydrophobia): bodies that don't fear it by nature are thrown across the land.
+    let fear = get(now, "hydrophobia");
+    if fear > 0.0 && get(normal, "hydrophobia") == 0.0 && env.wet {
+        out.push(Action::Teleport { range: fear * 32.0 });
     }
     out
 }
@@ -138,24 +191,58 @@ mod tests {
         let bases = attribute_bases(&normal, &normal);
         assert_eq!(base(&bases, "minecraft:max_health"), 20.0);
         assert_eq!(base(&bases, "minecraft:movement_speed"), 0.1);
-        assert!(periodic(&normal, &normal, 3, &mut 0, false).is_empty());
+        assert!(periodic(&normal, &normal, 3, &mut Progress::default(), &Env::default()).is_empty());
 
         // No heart: 4 less max health per heart, and heartbleed that grows.
         let no_heart = without("chestcavity:heart").scores(kind);
         assert_eq!(base(&attribute_bases(&no_heart, &normal), "minecraft:max_health"), 16.0);
-        let mut bleed = 0;
-        periodic(&no_heart, &normal, 1, &mut bleed, false);
-        let actions = periodic(&no_heart, &normal, 2, &mut bleed, false);
+        let mut progress = Progress::default();
+        periodic(&no_heart, &normal, 1, &mut progress, &Env::default());
+        let actions = periodic(&no_heart, &normal, 2, &mut progress, &Env::default());
         assert!(actions.contains(&Action::Damage { amount: 2.0, kind: "minecraft:generic" }), "{actions:?}");
+
+        // Lighter organs fall slower, and two scores that move one attribute add up.
+        let mut light = normal.clone();
+        light.insert("lightweight", 1.0);
+        light.insert("knockback_resistant", 1.0);
+        light.insert("knockback_resistance", 0.5);
+        let bases = attribute_bases(&light, &normal);
+        assert!((base(&bases, "minecraft:gravity") - 0.064).abs() < 1e-9);
+        assert!((base(&bases, "minecraft:knockback_resistance") - 0.6).abs() < 1e-9);
+        assert_eq!(base(&attribute_bases(&normal, &normal), "minecraft:gravity"), 0.08);
 
         // No spine: no nerves, no moving.
         let no_spine = without("chestcavity:spine").scores(kind);
         assert_eq!(base(&attribute_bases(&no_spine, &normal), "minecraft:movement_speed"), 0.0);
 
-        // No lungs drown out of water only.
-        let no_lungs = without("chestcavity:lung").scores(kind);
-        assert!(periodic(&no_lungs, &normal, 1, &mut 0, false).iter().any(|a| matches!(a, Action::Damage { kind: "minecraft:drown", .. })));
-        assert!(periodic(&no_lungs, &normal, 1, &mut 0, true).is_empty());
+        // Leaves in the sun feed, an allergic body hurts in water and then is spared, a crystal feeds.
+        let mut leafy = normal.clone();
+        leafy.insert("photosynthesis", 8.0);
+        let sun = Env { light: 15, ..Env::default() };
+        let mut progress = Progress::default();
+        let steps = (0..4).filter(|&t| periodic(&leafy, &normal, t, &mut progress, &sun).iter().any(|a| matches!(a, Action::Nourish { .. }))).count();
+        assert_eq!(steps, 1, "8 leaves in full light take 2.5 seconds for a step");
+        assert!(periodic(&leafy, &normal, 1, &mut Progress::default(), &Env::default()).is_empty(), "no light, no step");
+
+        let mut allergic = normal.clone();
+        allergic.insert("hydroallergenic", 1.0);
+        let dive = Env { wet: true, submerged: true, ..Env::default() };
+        let mut progress = Progress::default();
+        let hit = |p: &mut Progress, env: &Env| periodic(&allergic, &normal, 1, p, env).into_iter().find_map(|a| match a { Action::Damage { amount, kind: "minecraft:magic" } => Some(amount), _ => None });
+        assert_eq!(hit(&mut progress, &dive), Some(10.0));
+        assert_eq!(hit(&mut progress, &dive), None, "spared for a while after");
+        let mut progress = Progress::default();
+        assert_eq!(hit(&mut progress, &Env { wet: true, ..Env::default() }), Some(1.0), "rain only stings");
+        assert_eq!(hit(&mut Progress::default(), &Env::default()), None, "dry land is safe");
+
+        let mut crystalline = normal.clone();
+        crystalline.insert("crystalsynthesis", 2.0);
+        assert!(periodic(&crystalline, &normal, 1, &mut Progress::default(), &Env { crystal: true, ..Env::default() }).iter().any(|a| matches!(a, Action::Nourish { .. })));
+        assert!(periodic(&crystalline, &normal, 1, &mut Progress::default(), &Env::default()).is_empty());
+
+        let mut afraid = normal.clone();
+        afraid.insert("hydrophobia", 1.0);
+        assert!(periodic(&afraid, &normal, 1, &mut Progress::default(), &Env { wet: true, ..Env::default() }).contains(&Action::Teleport { range: 32.0 }));
 
         // Storage round trip.
         let c = without("chestcavity:liver");

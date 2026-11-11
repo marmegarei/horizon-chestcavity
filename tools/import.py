@@ -35,12 +35,18 @@ BEYOND_MOBS = {
     "minecraft:magma_cube": "magma_cube", "minecraft:strider": "strider",
     "minecraft:sniffer": "brute_animal", "minecraft:guardian": "guardian",
     "minecraft:elder_guardian": "elder_guardian", "minecraft:snow_golem": "snow_golem",
+    "minecraft:armor_stand": "armor_stand",
 }
 # 26.3 mobs the 1.20 data doesn't know, by the original's type they resemble.
 EXTRA_MOBS = {
     "minecraft:bogged": "undead/skeleton", "minecraft:camel": "animals/herbivore",
     "minecraft:armadillo": "animals/small_herbivore", "minecraft:happy_ghast": "magical_beasts/ghast",
     "minecraft:copper_golem": "constructs/iron_golem", "minecraft:parched": "undead/skeleton",
+    # Newer than the 1.20 data: by the body they look like.
+    "minecraft:camel_husk": "undead/zombie", "minecraft:zombie_nautilus": "undead/zombie",
+    "minecraft:giant": "undead/zombie", "minecraft:nautilus": "animals/large_fish",
+    "minecraft:sulfur_cube": "magical_beasts/slime", "minecraft:creaking": "undead/skeleton",
+    "minecraft:mannequin": "humanoids/human",
 }
 CLEAVER_TEMPLATES = {"wooden": "wooden_sword", "stone": "stone_sword", "gold": "golden_sword",
                      "iron": "iron_sword", "diamond": "diamond_sword", "netherite": "netherite_sword"}

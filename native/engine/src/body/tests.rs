@@ -2,6 +2,8 @@ use super::*;
 use crate::fake::Fake;
 use crate::screen::{EMPTY_SLOT, inventory_slot, stack};
 use chestcavity_shared::cavity::SLOTS;
+use chestcavity_shared::drops::Rng;
+use chestcavity_shared::effects::Env;
 
 const ME: u128 = 7;
 
@@ -62,10 +64,12 @@ fn no_heart_bleeds_and_kidneys_poison() {
     let mut body = Body::of(Cavity::of(player_kind()));
     let i = heart_slot(&body);
     body.take_out(&mut game, ME, i);
+    let who = Player { uuid: ME, dimension: "minecraft:overworld".into(), entity: 1, health: 20.0, position: [0.0, 64.0, 0.0], yaw: 0.0, pitch: 0.0 };
     body.ticks = 20;
-    body.beat(&mut game, ME, "Steve", "minecraft:air");
+    body.beat(&mut game, &who, &Env::default(), &mut Rng(1));
     body.ticks = 40;
-    body.beat(&mut game, ME, "Steve", "minecraft:air");
-    assert_eq!(game.commands, ["damage Steve 1 minecraft:generic", "damage Steve 2 minecraft:generic"]);
+    body.beat(&mut game, &who, &Env::default(), &mut Rng(1));
+    let hurt = |amount| ("minecraft:overworld".to_string(), 1, amount, "minecraft:generic".to_string(), None);
+    assert_eq!(game.hurts, [hurt(1.0), hurt(2.0)]);
     assert!(game.effects.is_empty());
 }

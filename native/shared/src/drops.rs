@@ -32,7 +32,7 @@ pub fn roll(kind: &Kind, rng: &mut Rng) -> Vec<(&'static str, u32)> {
     } else {
         return Vec::new();
     };
-    let mut pile: Vec<_> = kind.slots.to_vec();
+    let mut pile: Vec<_> = kind.slots.iter().filter(|s| s.1.starts_with("chestcavity:")).copied().collect();
     let mut out = Vec::new();
     for _ in 0..rolls {
         if pile.is_empty() {
@@ -66,7 +66,7 @@ mod tests {
         let mut seen = 0;
         for _ in 0..2000 {
             for (id, n) in for_mob(mob, &mut rng) {
-                assert!(own.contains(&id), "{id} is not a zombie organ");
+                assert!(own.contains(&id) && id.starts_with("chestcavity:"), "{id} is not a zombie organ");
                 assert!(n >= 1);
                 seen += 1;
             }

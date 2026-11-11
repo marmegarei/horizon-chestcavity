@@ -28,8 +28,15 @@ pub struct Kind {
 
 pub type Scores = BTreeMap<&'static str, f32>;
 
+/// Every door and trapdoor: Chest Cavity registers them as organs by tag (`#minecraft:doors`, `#minecraft:trapdoors`), each
+/// worth a full point of ease of access (a score of one oak door's stack size, 64, shared by its 64).
+static DOOR: Organ = Organ { id: "minecraft:door", name: "Door", stack: 64, scores: &[("ease_of_access", 64.0)] };
+
 pub fn organ(id: &str) -> Option<&'static Organ> {
-    ORGANS.binary_search_by(|o| o.id.cmp(id)).ok().map(|i| &ORGANS[i])
+    ORGANS.binary_search_by(|o| o.id.cmp(id)).ok().map(|i| &ORGANS[i]).or_else(|| {
+        let name = id.strip_prefix("minecraft:")?;
+        (name.ends_with("_door") || name.ends_with("_trapdoor")).then_some(&DOOR)
+    })
 }
 
 pub fn player_kind() -> &'static Kind {
@@ -122,6 +129,11 @@ mod tests {
         assert_eq!(mob_name("minecraft:cave_spider"), "Cave Spider");
         assert!(mob_kind("minecraft:zombie").is_some_and(|k| !k.slots.is_empty()));
         assert!(mob_kind("minecraft:villager_of_nowhere").is_none());
+        // A door is an organ too: one of them makes a chest easy to open.
+        let mut cavity = Cavity::of(player_kind());
+        cavity.slots[6] = Some(Slot { id: "minecraft:oak_door".into(), count: 1 });
+        assert_eq!(get(&cavity.scores(player_kind()), "ease_of_access"), 1.0);
+        assert!(organ("minecraft:iron_trapdoor").is_some() && organ("minecraft:stone").is_none());
         // Every kind's own cavity fits its 27 slots.
         for (_, k) in MOBS {
             assert!(KINDS[*k].slots.iter().all(|&(pos, ..)| (pos as usize) < SLOTS));

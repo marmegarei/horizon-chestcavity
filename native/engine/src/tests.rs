@@ -1,5 +1,5 @@
 //! The engine as the game drives it: a click with the Chest Opener only asks for a screen, the server tick
-//! opens it, and the screen's clicks move the organs.
+//! opens it and charges for it, and the screen's clicks move the organs.
 use super::*;
 use crate::fake::Fake;
 use chestcavity_shared::cavity::{Cavity, mob_kind, player_kind};
@@ -9,6 +9,11 @@ const ME: u128 = 7;
 const ZOMBIE: u32 = 9;
 /// The window the double gives every menu it opens.
 const WINDOW: i32 = 5;
+const OVERWORLD: &str = "minecraft:overworld";
+
+fn me() -> Player {
+    Player { uuid: ME, dimension: OVERWORLD.into(), entity: 1, health: 20.0, position: [0.0, 64.0, 0.0], yaw: 0.0, pitch: 0.0 }
+}
 
 fn world() -> (ChestCavity, Fake) {
     let mut game = Fake::new();
@@ -23,13 +28,14 @@ fn heart_slot(cavity: &Cavity) -> usize {
 #[test]
 fn the_opener_asks_and_the_next_server_tick_opens_the_screen() {
     let (cc, mut game) = world();
-    assert!(cc.queue(ME, Open::Own));
-    assert!(!cc.queue(ME, Open::Own), "a click held down asks again: nothing more");
+    cc.ask_own(me());
+    cc.ask_own(me());
     assert!(game.menu.is_none(), "nothing opens while the click is being handled");
 
     cc.open_queued(&mut game);
     assert_eq!(game.menu.as_ref().map(Vec::len), Some(27));
     assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica"));
+    assert_eq!(game.hurts, [(OVERWORLD.into(), 1, 4.0, "minecraft:generic".into(), None)], "opening a chest hurts, once");
     game.menu = None;
     cc.open_queued(&mut game);
     assert!(game.menu.is_none(), "it opens once");
@@ -45,16 +51,19 @@ fn the_opener_asks_and_the_next_server_tick_opens_the_screen() {
     cc.clicked(&mut game, ME, WINDOW + 1, 0, 0);
 
     // Once the screen has been used it can be asked for again.
-    assert!(cc.queue(ME, Open::Own));
+    cc.ask_own(me());
+    cc.open_queued(&mut game);
+    assert!(game.menu.is_some());
 }
 
 #[test]
 fn a_mobs_cavity_opens_at_the_tick_and_its_organs_come_out() {
     let (cc, mut game) = world();
     let &(slot, id, _) = mob_kind("minecraft:zombie").unwrap().slots.first().unwrap();
-    cc.queue(ME, Open::Mob { entity: ZOMBIE, kind: "minecraft:zombie".into() });
+    cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
     cc.open_queued(&mut game);
     assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica de Zombie"));
+    assert_eq!(game.hurts, [(OVERWORLD.into(), ZOMBIE, 4.0, "minecraft:player_attack".into(), Some(1))], "the zombie pays for it");
     assert_eq!(game.menu.as_ref().unwrap()[slot as usize].as_ref().unwrap().item.as_ref(), id);
 
     // A shift-click takes the organ out of the zombie; the zombie keeps it that way.
@@ -74,14 +83,57 @@ fn a_mobs_cavity_opens_at_the_tick_and_its_organs_come_out() {
 #[test]
 fn a_mob_without_a_body_and_a_game_without_menus_both_tell_the_player() {
     let (cc, mut game) = world();
-    cc.queue(ME, Open::Mob { entity: ZOMBIE, kind: "minecraft:villager_of_nowhere".into() });
+    cc.ask_mob(me(), ZOMBIE, "minecraft:villager_of_nowhere");
     cc.open_queued(&mut game);
     assert_eq!(game.said, ["Villager Of Nowhere não tem cavidade torácica"]);
 
     game.server_menus = false;
-    cc.queue(ME, Open::Own);
+    cc.ticks.fetch_add(10, Ordering::Relaxed);
+    cc.ask_own(me());
     cc.open_queued(&mut game);
     assert_eq!(game.said.last().map(String::as_str), Some(NO_SCREEN));
+    assert!(game.hurts.is_empty(), "nothing opened, nothing paid");
+}
+
+/// One click on a mob raises the entity's hook and then the item's own use (the client sends both): the second
+/// must not swap the mob's screen for your own chest, whichever comes first and wherever the tick falls.
+#[test]
+fn a_click_on_a_mob_is_not_taken_for_your_own_chest() {
+    for order in 0..3 {
+        let (cc, mut game) = world();
+        match order {
+            0 => {
+                cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
+                cc.ask_own(me());
+            }
+            1 => {
+                cc.ask_own(me());
+                cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
+            }
+            _ => {
+                cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
+                cc.open_queued(&mut game);
+                game.menu_title = None;
+                cc.ticks.fetch_add(1, Ordering::Relaxed);
+                cc.ask_own(me());
+            }
+        }
+        cc.open_queued(&mut game);
+        if order == 2 {
+            assert_eq!(game.menu_title, None, "the item's use a tick later asks for nothing");
+        } else {
+            assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica de Zombie"), "order {order}");
+        }
+        assert!(game.hurts.iter().all(|h| h.1 == ZOMBIE), "only the zombie paid: {:?}", game.hurts);
+    }
+
+    // A while later your own chest can be asked for again.
+    let (cc, mut game) = world();
+    cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
+    cc.ticks.fetch_add(10, Ordering::Relaxed);
+    cc.ask_own(me());
+    cc.open_queued(&mut game);
+    assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica"));
 }
 
 #[test]
