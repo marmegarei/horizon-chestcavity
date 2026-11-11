@@ -30,9 +30,8 @@ impl ChestCavity {
         if asked.is_empty() {
             return;
         }
-        let players = host.server_players();
         for (uuid, which) in asked {
-            let Some(p) = players.iter().find(|p| p.uuid == uuid && p.game_mode != 3 && p.health > 0.0).map(Player::from) else { continue };
+            let Some(p) = self.alive(uuid) else { continue };
             for ability in abilities::picked(&which) {
                 let said = self.with(host, uuid, |body, host| body.activate(host, &p, ability, &mut lock(&self.rng)));
                 if let Err(why) = said {
@@ -197,3 +196,10 @@ fn take_one(host: &mut dyn Host, uuid: u128, items: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+impl ChestCavity {
+    /// `uuid` as they were at their last tick, unless they are a spectator or dead.
+    pub(crate) fn alive(&self, uuid: u128) -> Option<Player> {
+        lock(&self.players).get(&uuid).filter(|(p, mode)| *mode != 3 && p.health > 0.0).map(|(p, _)| p.clone())
+    }
+}

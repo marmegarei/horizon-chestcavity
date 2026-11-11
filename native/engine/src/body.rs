@@ -35,8 +35,9 @@ pub struct Body {
     pub air: f32,
     /// The tick (of `ticks`) each ability rests until.
     pub rests: HashMap<&'static str, u64>,
-    /// Whether it has been let fly because of its organs.
+    /// Whether it has been let fly because of its organs, and the game mode that was in when it was.
     pub wings: bool,
+    pub mode: i32,
 }
 
 impl Body {
@@ -70,6 +71,7 @@ impl Body {
             air: 0.0,
             rests: HashMap::new(),
             wings: false,
+            mode: 0,
         };
         body.rescore();
         body

@@ -98,8 +98,12 @@ impl ChestCavity {
 
     /// The cavity of mob `entity` of type `kind`, as `open_own`.
     fn open_mob(&self, host: &mut dyn Host, uuid: u128, entity: u32, kind: &str) -> Option<bool> {
-        let (Some(body), Some(cavity)) = (mob_kind(kind), mob::load(host, entity, kind)) else {
+        let Some(body) = mob_kind(kind) else {
             Self::say(host, uuid, format!("{} não tem cavidade torácica", mob_name(kind)));
+            return None;
+        };
+        let Some(cavity) = mob::load(host, entity, kind) else {
+            Self::say(host, uuid, format!("{} já não está aqui ou o jogo não guarda a cavidade dele", mob_name(kind)));
             return None;
         };
         let Some(window) = mob::open_menu(host, uuid, &cavity, kind) else {

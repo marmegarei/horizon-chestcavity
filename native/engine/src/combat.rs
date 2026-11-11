@@ -78,9 +78,8 @@ impl ChestCavity {
         if dodges.is_empty() {
             return;
         }
-        let players = host.server_players();
         for (uuid, range) in dodges {
-            if let Some(p) = players.iter().find(|p| p.uuid == uuid && p.health > 0.0).map(Player::from) {
+            if let Some(p) = self.alive(uuid) {
                 teleport::randomly(host, &p, f64::from(range), &mut lock(&self.rng));
             }
         }
@@ -90,6 +89,11 @@ impl ChestCavity {
 impl Body {
     /// Wings: a body that has them may fly as a creative player does; one that loses them lands.
     pub fn fly(&mut self, host: &mut dyn Host, uuid: u128, game_mode: i32) {
+        // The game takes the allowance back whenever the game mode changes.
+        if game_mode != self.mode {
+            self.mode = game_mode;
+            self.wings = false;
+        }
         let wings = get(&self.scores, "flight") - get(&self.normal, "flight") > 0.0 && matches!(game_mode, 0 | 2);
         if wings != self.wings {
             host.set_flight(uuid, wings, false);

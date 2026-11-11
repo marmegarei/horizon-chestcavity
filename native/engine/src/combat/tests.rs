@@ -75,10 +75,13 @@ fn wings_let_a_survival_player_fly_and_losing_them_lands_them() {
     body.fly(&mut game, ME, 0);
     body.fly(&mut game, ME, 0);
     assert_eq!(game.flights, [true], "asked once, not every tick");
+    // A game mode change takes the allowance back: it is given again.
+    body.fly(&mut game, ME, 2);
+    assert_eq!(game.flights, [true, true]);
     body.cavity.slots[i] = None;
     body.changed(&mut game, ME);
-    body.fly(&mut game, ME, 0);
-    assert_eq!(game.flights, [true, false]);
+    body.fly(&mut game, ME, 2);
+    assert_eq!(game.flights, [true, true, false]);
 }
 
 #[test]

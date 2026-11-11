@@ -26,7 +26,10 @@ pub fn load(host: &mut dyn Host, entity: u32, mob: &str) -> Option<Cavity> {
     match ORGANS.get_existing(&mut *host, Holder::Entity(entity)) {
         Ok(Some(text)) => Some(Cavity::from_text(&text)),
         Ok(None) => Some(Cavity::of(kind)),
-        Err(_) => None,
+        Err(e) => {
+            crate::trace::line(&*host, format!("{mob} {entity}: the game keeps no cavity for it ({e:?})"));
+            None
+        }
     }
 }
 

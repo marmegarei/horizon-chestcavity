@@ -1,8 +1,9 @@
 //! Chest Cavity for Horizon, a native trait mod (docs/native-mods.md, "Trait mods"): the launcher
-//! links this crate into the game and calls `hooks()`. Organs in the player's chest, opened with the
-//! Chest Opener and swapped from a chest screen, what having (or missing) them does, what each organ
-//! says about itself in its tooltip, and organs from the mobs the player kills. The rules are in
-//! `chestcavity-shared`; `body` ties them to `Host`.
+//! links this crate into the game and calls `hooks()`. Organs in the chest of every player and mob, opened with the
+//! Chest Opener (`opening`) and swapped from a chest screen (`screen`, `mob`); what having them, missing them or
+//! eating, breathing, fighting and standing in the world with them does (`body`, `nutrition`, `environment`, `combat`);
+//! the abilities some of them give, set off with a key (`abilities`); what each organ says about itself in its tooltip,
+//! and organs from the mobs a player kills. The rules are in `chestcavity-shared`; the modules here tie them to `Host`.
 mod abilities;
 mod body;
 mod combat;
@@ -51,6 +52,9 @@ struct ChestCavity {
     bodies: Mutex<HashMap<u128, Body>>,
     /// The players' entity ids this session, for the hooks the game tells by id alone.
     entities: Mutex<HashMap<u32, u128>>,
+    /// Each player as they were at their last tick (and their game mode): the server tick has no acting player, and
+    /// the game lists `server_players` only in a world others can join.
+    players: Mutex<HashMap<u128, (Player, i32)>>,
     /// The screens asked for and not yet opened (see `opening`).
     opens: Mutex<HashMap<u128, Ask>>,
     /// The abilities asked for and not yet set off (see `abilities`): player, key group or ability.
@@ -81,6 +85,7 @@ impl ChestCavity {
         ChestCavity {
             bodies: Mutex::new(HashMap::new()),
             entities: Mutex::new(HashMap::new()),
+            players: Mutex::new(HashMap::new()),
             opens: Mutex::new(HashMap::new()),
             abilities: Mutex::new(Vec::new()),
             hits: Mutex::new(Vec::new()),
@@ -284,6 +289,7 @@ impl Hooks for ChestCavity {
         if let Ok(entity) = u32::try_from(p.entity_id) {
             lock(&self.entities).insert(entity, p.uuid);
         }
+        lock(&self.players).insert(p.uuid, (Player::from(&p), p.game_mode));
         self.with(host, p.uuid, |body, host| {
             body.ticks += 1;
             if p.game_mode == 3 {
@@ -342,6 +348,7 @@ impl Hooks for ChestCavity {
     fn player_logged_out(&self, _host: &mut dyn Host, event: &mut PlayerLoggedOutEvent<'_>) {
         lock(&self.bodies).remove(&event.player);
         lock(&self.entities).retain(|_, uuid| *uuid != event.player);
+        lock(&self.players).remove(&event.player);
         lock(&self.mob_screens).remove(&event.player);
         lock(&self.opens).remove(&event.player);
     }

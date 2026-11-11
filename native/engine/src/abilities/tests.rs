@@ -90,3 +90,35 @@ fn grazing_eats_the_grass_under_the_feet_and_nothing_else() {
     assert_eq!(game.commands, ["setblock 0 63 0 minecraft:dirt"]);
     assert_eq!(body.food.map(|f| f.0), Some(11));
 }
+
+#[test]
+fn a_key_asks_and_the_server_tick_sets_the_ability_off_for_a_player_the_engine_has_seen() {
+    let mut game = Fake::new();
+    game.blocks.insert([0, 63, 0], "minecraft:grass_block".into());
+    let cc = ChestCavity::new(1);
+    lock(&cc.bodies).insert(ME, body_with("chestcavity:herbivore_rumen", 1));
+
+    // Nobody has been seen on a tick yet: nothing to act for.
+    cc.ask_ability(ME, "utility");
+    cc.run_abilities(&mut game);
+    assert!(game.commands.is_empty());
+
+    lock(&cc.players).insert(ME, (player(20.0), 3));
+    cc.ask_ability(ME, "utility");
+    cc.run_abilities(&mut game);
+    assert!(game.commands.is_empty(), "a spectator does nothing");
+
+    lock(&cc.players).insert(ME, (player(20.0), 0));
+    cc.ask_ability(ME, "utility");
+    cc.run_abilities(&mut game);
+    assert_eq!(game.commands, ["setblock 0 63 0 minecraft:dirt"], "the key group sets off its abilities");
+
+    // A named ability that can't be used says why; a group stays quiet.
+    cc.ask_ability(ME, "pyromancy");
+    cc.run_abilities(&mut game);
+    assert!(game.said.last().is_some_and(|l| l.contains("não tem")), "{:?}", game.said);
+    let said = game.said.len();
+    cc.ask_ability(ME, "attack");
+    cc.run_abilities(&mut game);
+    assert_eq!(game.said.len(), said);
+}
