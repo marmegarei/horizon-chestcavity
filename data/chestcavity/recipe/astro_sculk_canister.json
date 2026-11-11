@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:stem_cell_canister",
+    [
+      "minecraft:sculk_catalyst",
+      "chestcavity:sculk_tumor"
+    ],
+    [
+      "minecraft:echo_shard",
+      "chestcavity:sculk_tumor"
+    ],
+    [
+      "minecraft:echo_shard",
+      "chestcavity:sculk_tumor"
+    ]
+  ],
+  "result": {
+    "id": "chestcavity:sculk_canister"
+  }
+}

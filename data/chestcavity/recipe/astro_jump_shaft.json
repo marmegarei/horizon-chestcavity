@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "  C",
+    " # ",
+    "C  "
+  ],
+  "key": {
+    "C": "minecraft:gold_ingot",
+    "#": "#minecraft:stone_crafting_materials"
+  },
+  "result": {
+    "id": "chestcavity:jump_shaft",
+    "count": 8
+  }
+}

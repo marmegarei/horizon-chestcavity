@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " A ",
+    "CBC",
+    " A "
+  ],
+  "key": {
+    "A": "chestcavity:slime_core",
+    "B": "chestcavity:stomach",
+    "C": "minecraft:slime_ball"
+  },
+  "result": {
+    "id": "chestcavity:slime_stomach"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " P ",
+    "C#C"
+  ],
+  "key": {
+    "P": "minecraft:glass_bottle",
+    "C": "minecraft:gold_ingot",
+    "#": "#minecraft:stone_crafting_materials"
+  },
+  "result": {
+    "id": "chestcavity:electrolyzer"
+  }
+}

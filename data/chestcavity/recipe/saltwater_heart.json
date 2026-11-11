@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:heart",
+    "minecraft:heart_of_the_sea"
+  ],
+  "result": {
+    "id": "chestcavity:saltwater_heart"
+  }
+}

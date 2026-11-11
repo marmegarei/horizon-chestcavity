@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " AB",
+    "  C"
+  ],
+  "key": {
+    "A": "minecraft:lever",
+    "B": "minecraft:iron_ingot",
+    "C": "minecraft:stick"
+  },
+  "result": {
+    "id": "chestcavity:chest_opener"
+  }
+}

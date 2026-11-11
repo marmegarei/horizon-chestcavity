@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:dragon_heart",
+    "chestcavity:gas_bladder"
+  ],
+  "result": {
+    "id": "chestcavity:draconis_fundamentum"
+  }
+}

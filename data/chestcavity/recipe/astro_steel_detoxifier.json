@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IXI",
+    "I  "
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "X": "chestcavity:filter_pump"
+  },
+  "result": {
+    "id": "chestcavity:steel_detoxifier"
+  }
+}

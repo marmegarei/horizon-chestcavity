@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "BEB",
+    "EHE"
+  ],
+  "key": {
+    "E": "minecraft:echo_shard",
+    "H": "chestcavity:resonant_core",
+    "B": "minecraft:bone"
+  },
+  "result": {
+    "id": "chestcavity:adrenal_catalyst"
+  }
+}

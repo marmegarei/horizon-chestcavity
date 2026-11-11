@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "#chestcavity:salvageable_bone_meal"
+  ],
+  "result": {
+    "id": "minecraft:bone_meal"
+  }
+}

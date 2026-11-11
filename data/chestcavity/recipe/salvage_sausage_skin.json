@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "#chestcavity:salvageable_sausage_skin"
+  ],
+  "result": {
+    "id": "chestcavity:sausage_skin",
+    "count": 2
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "II",
+    "IS"
+  ],
+  "key": {
+    "I": "#minecraft:planks",
+    "S": "minecraft:stick"
+  },
+  "result": {
+    "id": "chestcavity:wooden_cleaver"
+  }
+}

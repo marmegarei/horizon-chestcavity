@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "#chestcavity:salvageable_butchered_meat"
+  ],
+  "result": {
+    "id": "chestcavity:raw_butchered_meat"
+  }
+}

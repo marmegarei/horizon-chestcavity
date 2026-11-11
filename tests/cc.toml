@@ -1,0 +1,21 @@
+# The mod in the sandbox, without a game: its command, and that a normal body ticks without trouble.
+[[step]]
+expect.commands = ["cc"]
+
+[[step]]
+ticks = 40
+command = "cc show"
+expect.feedback = "Health 1.0, Strength 8.0, Speed 8.0, Defense 4.5, Nerves 1.0, Filtration 2.0, Breath 2.0, Digestion 1.0, Nutrition 4.0, Luck 1.0"
+
+# Taking the heart out (slot 5) leaves no health score.
+[[step]]
+command = "cc take 5"
+expect.feedback = "Took slot 5 out"
+
+[[step]]
+command = "cc show"
+expect.feedback = "Health 0.0 (-1.0), Strength 8.0, Speed 8.0, Defense 4.5, Nerves 1.0, Filtration 2.0, Breath 2.0, Digestion 1.0, Nutrition 4.0, Luck 1.0"
+
+[[step]]
+command = "cc take 5"
+expect.error = "Slot 5 is empty"

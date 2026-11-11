@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "GIG",
+    "bQb",
+    "GIG"
+  ],
+  "key": {
+    "G": "minecraft:gold_ingot",
+    "I": "#minecraft:planks",
+    "Q": "minecraft:comparator",
+    "b": "chestcavity:golden_wiring"
+  },
+  "result": {
+    "id": "chestcavity:circuitry"
+  }
+}

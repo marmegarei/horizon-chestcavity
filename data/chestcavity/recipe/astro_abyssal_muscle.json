@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:muscle",
+    "chestcavity:muscle",
+    "chestcavity:muscle",
+    "chestcavity:muscle",
+    "minecraft:echo_shard",
+    "chestcavity:muscle",
+    "chestcavity:muscle",
+    "chestcavity:muscle",
+    "chestcavity:muscle"
+  ],
+  "result": {
+    "id": "chestcavity:abyssal_muscle"
+  }
+}

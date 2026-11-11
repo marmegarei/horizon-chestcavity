@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:smoking",
+  "category": "food",
+  "ingredient": "chestcavity:raw_mini_sausage",
+  "result": {
+    "id": "chestcavity:mini_sausage"
+  },
+  "experience": 0.35,
+  "cookingtime": 100
+}

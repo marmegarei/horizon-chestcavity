@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:raw_organ_meat",
+    "chestcavity:sausage_skin"
+  ],
+  "result": {
+    "id": "chestcavity:raw_rich_sausage"
+  }
+}

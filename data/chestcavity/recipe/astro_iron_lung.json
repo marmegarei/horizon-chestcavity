@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " E ",
+    "EHE",
+    " E "
+  ],
+  "key": {
+    "E": "minecraft:iron_ingot",
+    "H": "chestcavity:lung"
+  },
+  "result": {
+    "id": "chestcavity:iron_lung"
+  }
+}

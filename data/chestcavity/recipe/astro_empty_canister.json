@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IiI",
+    "IGI",
+    "IiI"
+  ],
+  "key": {
+    "G": "minecraft:glass_pane",
+    "i": "minecraft:iron_nugget",
+    "I": "minecraft:iron_ingot"
+  },
+  "result": {
+    "id": "chestcavity:empty_canister"
+  }
+}

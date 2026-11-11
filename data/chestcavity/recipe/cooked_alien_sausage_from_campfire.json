@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:campfire_cooking",
+  "category": "food",
+  "ingredient": "chestcavity:raw_alien_sausage",
+  "result": {
+    "id": "chestcavity:alien_sausage"
+  },
+  "experience": 0.35,
+  "cookingtime": 600
+}

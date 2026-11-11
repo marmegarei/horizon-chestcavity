@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "  C",
+    " # ",
+    "C  "
+  ],
+  "key": {
+    "C": "minecraft:amethyst_block",
+    "#": "chestcavity:actuator"
+  },
+  "result": {
+    "id": "chestcavity:crystal_rod",
+    "count": 8
+  }
+}

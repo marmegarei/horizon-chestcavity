@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "P",
+    "C",
+    "#"
+  ],
+  "key": {
+    "P": "minecraft:diamond",
+    "C": "minecraft:gold_ingot",
+    "#": "#minecraft:stone_crafting_materials"
+  },
+  "result": {
+    "id": "chestcavity:gem_holster"
+  }
+}

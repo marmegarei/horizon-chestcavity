@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "EEE",
+    "EHE",
+    "EEE"
+  ],
+  "key": {
+    "E": "minecraft:amethyst_shard",
+    "H": "minecraft:amethyst_block"
+  },
+  "result": {
+    "id": "chestcavity:resonant_core"
+  }
+}

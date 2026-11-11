@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "sCC",
+    "s  "
+  ],
+  "key": {
+    "C": "minecraft:amethyst_block",
+    "s": "minecraft:amethyst_shard"
+  },
+  "result": {
+    "id": "chestcavity:sharded_rib",
+    "count": 2
+  }
+}

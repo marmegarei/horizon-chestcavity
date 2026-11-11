@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:rotten_heart",
+    "minecraft:golden_apple"
+  ],
+  "result": {
+    "id": "chestcavity:reanimated_heart"
+  }
+}

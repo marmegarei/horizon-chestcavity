@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:empty_canister",
+    [
+      "chestcavity:liver",
+      "chestcavity:animal_liver"
+    ],
+    "minecraft:bone_meal"
+  ],
+  "result": {
+    "id": "chestcavity:stem_cell_canister"
+  }
+}

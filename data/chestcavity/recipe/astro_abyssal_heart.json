@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " E ",
+    "EHE",
+    " E "
+  ],
+  "key": {
+    "E": "minecraft:echo_shard",
+    "H": "chestcavity:heart"
+  },
+  "result": {
+    "id": "chestcavity:abyssal_heart"
+  }
+}

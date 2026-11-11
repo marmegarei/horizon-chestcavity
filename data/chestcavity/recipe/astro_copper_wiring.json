@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:string",
+    "minecraft:copper_ingot"
+  ],
+  "result": {
+    "id": "chestcavity:copper_wiring",
+    "count": 2
+  }
+}

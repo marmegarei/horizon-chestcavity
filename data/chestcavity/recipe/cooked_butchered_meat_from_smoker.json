@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:smoking",
+  "category": "food",
+  "ingredient": "chestcavity:raw_butchered_meat",
+  "result": {
+    "id": "chestcavity:cooked_butchered_meat"
+  },
+  "experience": 0.35,
+  "cookingtime": 100
+}

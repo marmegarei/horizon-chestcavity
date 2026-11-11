@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "chestcavity:copper_wiring",
+    "chestcavity:copper_wiring",
+    "chestcavity:copper_wiring",
+    "minecraft:redstone",
+    "minecraft:iron_ingot",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "chestcavity:steel_cable",
+    "count": 2
+  }
+}

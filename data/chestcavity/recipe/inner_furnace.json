@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " H ",
+    " F ",
+    " H "
+  ],
+  "key": {
+    "H": "minecraft:hopper",
+    "F": "minecraft:furnace"
+  },
+  "result": {
+    "id": "chestcavity:inner_furnace"
+  }
+}

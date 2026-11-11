@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:campfire_cooking",
+  "category": "food",
+  "ingredient": "chestcavity:raw_dragon_organ_meat",
+  "result": {
+    "id": "chestcavity:cooked_dragon_organ_meat"
+  },
+  "experience": 2.0,
+  "cookingtime": 1200
+}

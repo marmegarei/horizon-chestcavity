@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "B B",
+    "EHE",
+    " E "
+  ],
+  "key": {
+    "E": "minecraft:echo_shard",
+    "H": "chestcavity:resonant_core",
+    "B": "minecraft:bone"
+  },
+  "result": {
+    "id": "chestcavity:adrenal_shrieker"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:string",
+    "minecraft:redstone",
+    "minecraft:gold_ingot"
+  ],
+  "result": {
+    "id": "chestcavity:golden_wiring",
+    "count": 2
+  }
+}

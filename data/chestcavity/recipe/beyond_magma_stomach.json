@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " A ",
+    "CBC",
+    " A "
+  ],
+  "key": {
+    "A": "chestcavity:magma_cube_core",
+    "B": "chestcavity:stomach",
+    "C": "minecraft:magma_cream"
+  },
+  "result": {
+    "id": "chestcavity:magma_stomach"
+  }
+}

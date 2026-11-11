@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " E ",
+    "EHE",
+    " E "
+  ],
+  "key": {
+    "E": "chestcavity:autophagy_tumor",
+    "H": "chestcavity:stomach"
+  },
+  "result": {
+    "id": "chestcavity:autophagy_stomach"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:amethyst_shard",
+    "chestcavity:sculk_tumor"
+  ],
+  "result": {
+    "id": "minecraft:echo_shard",
+    "count": 2
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " E ",
+    "EHE",
+    " E "
+  ],
+  "key": {
+    "E": "minecraft:gold_ingot",
+    "H": "chestcavity:heart"
+  },
+  "result": {
+    "id": "chestcavity:heart_of_gold"
+  }
+}

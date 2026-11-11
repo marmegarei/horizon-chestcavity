@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:soul_sand",
+    "minecraft:glass_bottle"
+  ],
+  "result": {
+    "id": "chestcavity:captured_soul"
+  }
+}
