@@ -26,7 +26,8 @@ def pack(out, version, content, native):
             z.write(ROOT / "horizon-mod.toml", "horizon-mod.toml")
             for top in ("assets", "data"):
                 for p in sorted((ROOT / top).rglob("*")):
-                    if p.is_file():
+                    # Tool caches (.claude-flow, __pycache__) are not content: they can hold local paths.
+                    if p.is_file() and not {".claude-flow", "__pycache__"} & set(p.relative_to(ROOT).parts):
                         z.write(p, p.relative_to(ROOT).as_posix())
         if native:
             manifest = {"schema": 1, "id": ID, "version": version, "game": "26.3", "horizon": HORIZON, "mixins": MIXINS, "hooks": HOOKS}
