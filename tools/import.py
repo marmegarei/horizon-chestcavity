@@ -20,7 +20,7 @@ NS = "chestcavity"
 
 OUT_ASSETS = ROOT / "assets" / NS
 OUT_DATA = ROOT / "data"
-OUT_RS = ROOT / "legacy-wasm/src/organs.rs"
+OUT_RS = ROOT / "native/shared/src/organs.rs"
 
 # Beyond renamed some of the original's organs; theirs map back to ours.
 BEYOND_ALIAS = {

@@ -1,0 +1,8 @@
+[package]
+name = "chestcavity-shared"
+version = "0.2.0"
+edition = "2024"
+
+# Pure logic, no Horizon dependency: it builds and tests with plain `cargo test`.
+# The launcher builds it once with the game, as a `[[crate]]` of the bundle.
+[dependencies]
