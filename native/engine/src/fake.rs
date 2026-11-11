@@ -11,6 +11,11 @@ pub struct Fake {
     pub effects: Vec<NativeEffect>,
     pub menu: Option<Vec<Option<ItemStack>>>,
     pub menu_title: Option<String>,
+    /// Whether the game's server menus reach the player (not the window's own player).
+    pub server_menus: bool,
+    /// The mod screens opened, and what the player was told.
+    pub screens: Vec<String>,
+    pub said: Vec<String>,
     /// The mobs of the world, by entity id.
     pub mobs: HashMap<u32, Attachments>,
 }
@@ -25,6 +30,9 @@ impl Fake {
             effects: Vec::new(),
             menu: None,
             menu_title: None,
+            server_menus: true,
+            screens: Vec::new(),
+            said: Vec::new(),
             mobs: HashMap::new(),
         }
     }
@@ -72,12 +80,44 @@ impl Host for Fake {
     }
     fn open_menu(&mut self, _: u128, rows: u8, title: Text, items: Vec<Option<ItemStack>>) -> Option<i32> {
         assert_eq!((rows, items.len()), (3, 27));
+        if !self.server_menus {
+            return None;
+        }
         self.menu = Some(items);
         self.menu_title = Some(title.plain());
         Some(5)
     }
     fn set_menu_items(&mut self, _: u128, items: Vec<Option<ItemStack>>) {
         self.menu = Some(items);
+    }
+    fn held_stack(&self, _: u128) -> Option<ItemStack> {
+        // The main hand of the double is hotbar slot 0.
+        self.inventory[0].clone()
+    }
+    fn take_items(&mut self, item: &str, count: u32) -> u32 {
+        let mut taken = 0;
+        for slot in self.inventory.iter_mut() {
+            let Some(s) = slot.as_mut().filter(|s| &*s.item == item) else { continue };
+            let n = s.count.min(count - taken);
+            s.count -= n;
+            taken += n;
+            if s.count == 0 {
+                *slot = None;
+            }
+        }
+        taken
+    }
+    fn mod_screen_open(&mut self, mod_id: &str) -> bool {
+        self.screens.push(mod_id.to_string());
+        true
+    }
+    fn tell(&mut self, _: u128, line: Text) -> bool {
+        self.said.push(line.plain());
+        true
+    }
+    fn action_bar(&mut self, _: u128, line: Text) -> bool {
+        self.said.push(line.plain());
+        true
     }
     fn add_effect(&mut self, _: u128, effect: &NativeEffect) -> bool {
         self.effects.push(effect.clone());

@@ -23,7 +23,8 @@ fn a_mobs_organs_come_out_and_go_back_in() {
     let start = count(&mut game);
 
     // Its screen shows its type's organs under its name.
-    assert_eq!(open(&mut game, ME, ZOMBIE, "minecraft:zombie"), Ok(5));
+    let cavity = load(&mut game, ZOMBIE, "minecraft:zombie").unwrap();
+    assert_eq!(open_menu(&mut game, ME, &cavity, "minecraft:zombie"), Some(5));
     assert_eq!(game.menu_title.as_deref(), Some("Zombie's Chest Cavity"));
     assert_eq!(game.menu.as_ref().unwrap()[slot].as_ref().unwrap().item.as_ref(), id);
 
@@ -43,7 +44,7 @@ fn a_mobs_organs_come_out_and_go_back_in() {
 #[test]
 fn a_mob_without_a_body_or_gone_gives_nothing() {
     let (mut game, slot, _) = zombie_world();
-    assert_eq!(open(&mut game, ME, ZOMBIE, "minecraft:villager_of_nowhere"), Err("Villager Of Nowhere has no chest cavity".to_string()));
+    assert!(load(&mut game, ZOMBIE, "minecraft:villager_of_nowhere").is_none(), "no body, no cavity");
 
     // The zombie is gone by the time of the click: no organ is handed out.
     game.mobs.clear();

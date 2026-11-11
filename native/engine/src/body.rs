@@ -8,6 +8,7 @@ use horizon_client::mod_api::{Host, ItemStack, NativeEffect, Tag, Text};
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
+pub const NO_HELD: &str = "Hold an organ in your main hand to put it in";
 
 pub struct Body {
     pub cavity: Cavity,
@@ -102,6 +103,13 @@ impl Body {
         let click = screen::put_in(host, &mut self.cavity, held, remove);
         self.settle(host, uuid, click)
     }
+    /// Puts the organ in the player's main hand in; what to tell them.
+    pub fn put_held(&mut self, host: &mut dyn Host, uuid: u128) -> String {
+        let Some(held) = host.held_stack(uuid) else { return NO_HELD.into() };
+        self.put_in(host, uuid, held.clone(), |host, h| host.take_items(&h.item, h.count) == h.count)
+            .unwrap_or_else(|| format!("Put {} in", held.item))
+    }
+
     /// Once a second: what the organs do over time. `eyes` is the block at the player's eyes.
     pub fn beat(&mut self, host: &mut dyn Host, uuid: u128, name: &str, eyes: &str) {
         let seconds = self.ticks / 20;
