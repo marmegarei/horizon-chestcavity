@@ -1,9 +1,11 @@
-# Chest Cavity para o Horizon: o que falta (versão 0.6.2)
+# Chest Cavity para o Horizon: o que falta (versão 0.7.0)
 
 Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest Cavity Beyond e o Astro Adds, lidos em `vendor/`. Nada daqui foi ainda testado dentro do jogo: o que está em "Feito" compila, passa os testes e usa hooks que a documentação do Horizon descreve, mas só o jogo diz se se comporta como deve.
 
 ## Feito nesta versão
 
+- **Línguas**: todo o texto do mod (nomes dos itens, descrições dos órgãos, mensagens, comandos) está em inglês e português (`pt_pt` e `pt_br`), conforme a língua do Minecraft; as outras línguas veem inglês.
+- **Mobs**: o que se tira do peito de um mob muda o mob.
 - **Abrir o peito**: no ar abre o teu; com botão direito num mob abre o dele (órgãos próprios de cada espécie, guardados no mob). Custa 4 de dano a quem é aberto, salvo `ease_of_access` (agora há o pseudo-órgão das portas e alçapões). Em criativo o jogo não deixa magoar o jogador.
 - **Comer**: digestão, nutrição, carnívoro/herbívoro, comida podre, resistência (cansaço) e metabolismo mais rápido. Náusea e fome com estômago ou intestinos maus.
 - **Respirar**: pulmões, capacidade pulmonar e guelras, com as fórmulas do original.
@@ -54,8 +56,8 @@ Estado a 11-11-2026. Fontes: o mod original (Chest Cavity, Tigereye504), o Chest
 ### Cavidades e mobs
 - Só se pode abrir um mob fraco e sem peitoral (vida ≤ 20 ou ≤ 50 %, `ease_of_access` salta isto). O port abre qualquer mob.
 - Estado "aberta" e cavidade preguiçosa: o original só aplica os efeitos depois de a cavidade ser aberta.
-- Os órgãos de um mob não mudam o mob (o creeper sem apêndice ainda explode, o wither larga sempre a estrela, etc.). Isto inclui os mixins de Enderman, Shulker, Blaze, Ghast, Breeze, Warden, Guardian, Llama, golem de neve, aranha de caverna, golem de ferro, strider.
-- Ranhuras proibidas e órgãos excecionais por tipo (o importador ignora `forbiddenSlots` e `exceptionalOrgans`: p.ex. o tronco do creeper vale vida, defesa e nervos).
+- Os mobs cujo peito foi aberto vivem pelos órgãos que têm (sem coração sangram até morrer, sem espinha não se mexem, sem pulmões afogam-se, sem rins envenenam-se, vida, força e velocidade pelos músculos e coração). Falta o resto: o creeper sem apêndice ainda explode, o wither larga sempre a estrela, e os mixins de Enderman, Shulker, Blaze, Ghast, Breeze, Warden, Guardian, Llama, golem de neve, aranha de caverna, golem de ferro e strider. Um mob que nunca foi aberto não muda.
+- Ranhuras proibidas por tipo (o importador ignora `forbiddenSlots`). Os órgãos excecionais por tipo (o tronco do creeper vale vida, defesa e nervos) já estão.
 - Tamanhos de cavidade do Beyond (27 a 54 ranhuras), conversão de órgãos ao transformar um mob.
 - Partes do dragão: o clique numa parte devia abrir o dragão.
 - Abrir com um dispensador (Astro).

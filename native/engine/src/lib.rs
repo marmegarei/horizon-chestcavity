@@ -11,28 +11,32 @@ mod environment;
 #[cfg(test)]
 mod fake;
 mod mob;
+mod mobbody;
 mod nutrition;
 mod opening;
 mod screen;
 mod teleport;
 #[cfg(test)]
 mod tests;
+mod texts;
 mod trace;
 
 use body::Body;
 use chestcavity_shared::cavity::{SLOTS, organ};
-use chestcavity_shared::describe::{Tone, describe};
+use chestcavity_shared::describe::{IDLE, Tone, describe};
 use chestcavity_shared::drops::{self, Rng};
 use chestcavity_shared::food::Meal;
 use horizon_client::mod_api::{
-    AttackEntityEvent, Flow, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
+    AttackEntityEvent, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host, InteractEntityEvent, ItemStack, KeyEvent, LivingBreatheEvent, LivingEntityUseItemFinishEvent,
     LivingIncomingDamageV3Event, LootDropsEvent, MenuClickedEvent, MenuClosedEvent, NativeCommand, NetFromClientEvent,
     PerformCommandEvent, PlayerLoggedOutEvent, PlayerRespawnedEvent, PlayerTickEvent, RegisterCommandsEvent, ServerTickEvent,
     ServerTickPhase, Text, TooltipEvent, UseItemEvent, UseItemOnEvent,
 };
 use combat::Hit;
+use mobbody::MobBody;
 use opening::{Ask, Player};
 use screen::stack;
+use texts::{arg_text, msg};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -41,7 +45,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const OPENER: &str = "chestcavity:chest_opener";
 /// The message a client sends when an ability key goes down: its key group.
 const ABILITY_CHANNEL: &str = "chestcavity:ability";
-const NO_SCREEN: &str = "Não foi possível abrir o ecrã: usa /cc list, /cc take <ranhura> e /cc put";
 
 pub fn hooks() -> Box<dyn Hooks> {
     let seed = SystemTime::now().duration_since(UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
@@ -67,6 +70,8 @@ struct ChestCavity {
     ticks: AtomicU64,
     /// The mob screens players have open.
     mob_screens: Mutex<HashMap<u128, MobScreen>>,
+    /// The mobs whose cavity has been changed, by entity id (see `mobbody`).
+    mobs: Mutex<HashMap<u32, MobBody>>,
     rng: Mutex<Rng>,
 }
 
@@ -74,6 +79,7 @@ struct MobScreen {
     window: i32,
     entity: u32,
     mob: String,
+    dimension: String,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -93,6 +99,7 @@ impl ChestCavity {
             mob_clicks: Mutex::new(HashMap::new()),
             ticks: AtomicU64::new(0),
             mob_screens: Mutex::new(HashMap::new()),
+            mobs: Mutex::new(HashMap::new()),
             rng: Mutex::new(Rng(seed | 1)),
         }
     }
@@ -107,8 +114,8 @@ impl ChestCavity {
         out
     }
 
-    fn say(host: &mut dyn Host, uuid: u128, line: String) {
-        host.tell(uuid, Text::literal(line));
+    fn say(host: &mut dyn Host, uuid: u128, line: impl Into<Text>) {
+        host.tell(uuid, line.into());
     }
 
     /// A click on slot `slot` of the screen `window` of player `uuid`, as the game tells it.
@@ -117,16 +124,21 @@ impl ChestCavity {
         if !matches!(mode, 0 | 1) {
             return;
         }
-        let mob = lock(&self.mob_screens).get(&uuid).filter(|s| s.window == window).map(|s| (s.entity, s.mob.clone()));
-        let line = if let Some((entity, mob)) = mob {
-            mob::click(host, uuid, entity, &mob, slot)
+        let mob = lock(&self.mob_screens).get(&uuid).filter(|s| s.window == window).map(|s| (s.entity, s.mob.clone(), s.dimension.clone()));
+        let line = if let Some((entity, mob, dimension)) = mob {
+            let line = mob::click(host, uuid, entity, &mob, slot);
+            // Whatever the click did, the mob lives by the cavity it has now.
+            if let Some(cavity) = mob::load(host, entity, &mob) {
+                self.track_mob(entity, &mob, &dimension, &cavity);
+            }
+            line
         } else if lock(&self.bodies).get(&uuid).is_some_and(|b| b.menu == Some(window)) {
             self.with(host, uuid, |body, host| body.click(host, uuid, slot))
         } else {
             return;
         };
         if let Some(line) = line {
-            host.action_bar(uuid, Text::literal(line));
+            host.action_bar(uuid, line.text());
         }
     }
 
@@ -138,13 +150,13 @@ impl ChestCavity {
             .into_iter()
             .map(|line| {
                 let color = match line.tone {
-                    Tone::Better => "§a",
-                    Tone::Worse => "§c",
-                    Tone::Ability => "§d",
-                    Tone::Note => "§6",
+                    Tone::Better => 0x55FF55,
+                    Tone::Worse => 0xFF5555,
+                    Tone::Ability => 0xFF55FF,
+                    Tone::Note => 0xFFAA00,
                 };
-                let idle = if line.idle { " §8(sem efeito ainda)" } else { "" };
-                Text::legacy(&format!("{color}{}{idle}", line.text))
+                let idle = if line.idle { Text::translate_with_fallback(IDLE.0, IDLE.1, &[]).with_color(0x555555) } else { Text::empty() };
+                arg_text(&line.text).with_color(color).append(idle)
             })
             .collect()
     }
@@ -198,20 +210,20 @@ impl Hooks for ChestCavity {
             self.ask_ability(uuid, arg.unwrap_or(""));
             return Flow::Cancel;
         }
-        let lines = self.with(host, uuid, |body, host| match sub {
+        let lines: Vec<Text> = self.with(host, uuid, |body, host| match sub {
             None | Some("show") => vec![body.summary()],
             Some("list") => screen::list(&body.cavity),
             Some("reset") => {
                 body.reset(host, uuid);
-                vec!["Cavidade torácica de volta ao normal".into()]
+                vec![msg("chestcavity.msg.reset").text()]
             }
             Some("take") => match arg.and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=SLOTS).contains(n)) {
-                Some(n) if body.cavity.slots[n - 1].is_none() => vec![format!("A ranhura {n} está vazia")],
-                Some(n) => vec![body.take_out(host, uuid, n - 1).unwrap_or_else(|| format!("Tiraste a ranhura {n}"))],
-                None => vec![format!("/cc take 1-{SLOTS}")],
+                Some(n) if body.cavity.slots[n - 1].is_none() => vec![msg("chestcavity.msg.slot_empty").plain_arg(n).text()],
+                Some(n) => vec![body.take_out(host, uuid, n - 1).unwrap_or_else(|| msg("chestcavity.msg.took").plain_arg(n)).text()],
+                None => vec![msg("chestcavity.msg.take_usage").plain_arg(SLOTS).text()],
             },
-            Some("put") => vec![body.put_held(host, uuid)],
-            Some(other) => vec![format!("Desconhecido: /cc {other} (show, list, take <ranhura>, put, ability <nome>)")],
+            Some("put") => vec![body.put_held(host, uuid).text()],
+            Some(other) => vec![msg("chestcavity.msg.unknown_sub").plain_arg(other).text()],
         });
         for line in lines {
             Self::say(host, uuid, line);
@@ -242,11 +254,26 @@ impl Hooks for ChestCavity {
 
     fn server_tick(&self, host: &mut dyn Host, event: &mut ServerTickEvent<'_>) {
         if matches!(event.phase, ServerTickPhase::ServerTickEnd { .. }) {
-            self.ticks.fetch_add(1, Ordering::Relaxed);
+            let ticks = self.ticks.fetch_add(1, Ordering::Relaxed) + 1;
+            if ticks % 20 == 0 {
+                self.run_mobs(host, ticks / 20);
+            }
         }
         self.open_queued(host);
         self.run_abilities(host);
         self.run_combat(host);
+    }
+
+    /// A mob that comes back with a cavity a player changed lives by it again.
+    fn entity_join_level(&self, host: &mut dyn Host, event: &mut EntityJoinLevelEvent<'_>) -> Flow {
+        if event.loaded_from_disk {
+            self.mob_joined(host, event.entity, event.kind, event.dimension);
+        }
+        Flow::Continue
+    }
+
+    fn entity_leave_level(&self, _host: &mut dyn Host, event: &mut EntityLeaveLevelEvent<'_>) {
+        lock(&self.mobs).remove(&event.entity);
     }
 
     /// A player's blow: what their body adds to it is done at the server tick.

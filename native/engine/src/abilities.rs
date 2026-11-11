@@ -3,6 +3,7 @@
 use crate::body::Body;
 use crate::opening::Player;
 use crate::screen::stack;
+use crate::texts::{Msg, ability_name, msg};
 use crate::{ChestCavity, lock};
 use chestcavity_shared::abilities::{self, Ability};
 use chestcavity_shared::cavity::{get, organ};
@@ -46,13 +47,13 @@ impl ChestCavity {
 
 impl Body {
     /// The ability, if this body has it and it isn't resting.
-    pub fn activate(&mut self, host: &mut dyn Host, p: &Player, ability: &Ability, rng: &mut Rng) -> Result<(), String> {
+    pub fn activate(&mut self, host: &mut dyn Host, p: &Player, ability: &Ability, rng: &mut Rng) -> Result<(), Msg> {
         let level = get(&self.scores, ability.score) - get(&self.normal, ability.score);
         if level <= 0.0 {
-            return Err(format!("O teu corpo não tem {}", ability.name));
+            return Err(msg("chestcavity.msg.no_ability").arg(ability_name(ability.name)));
         }
         if let Some(&until) = self.rests.get(ability.name).filter(|&&until| until > self.ticks) {
-            return Err(format!("{} ainda está a recuperar ({} s)", ability.name, (until - self.ticks).div_ceil(20)));
+            return Err(msg("chestcavity.msg.resting").arg(ability_name(ability.name)).plain_arg((until - self.ticks).div_ceil(20)));
         }
         let rest = match ability.name {
             "iron_repair" => self.iron_repair(host, p, level)?,
@@ -79,12 +80,12 @@ impl Body {
     }
 
     /// An iron ingot mends a quarter of the body's health; the better the organ, the shorter the rest.
-    fn iron_repair(&mut self, host: &mut dyn Host, p: &Player, level: f32) -> Result<Option<u32>, String> {
+    fn iron_repair(&mut self, host: &mut dyn Host, p: &Player, level: f32) -> Result<Option<u32>, Msg> {
         if p.health >= self.max_health() {
-            return Err("Já tens a vida cheia".into());
+            return Err(msg("chestcavity.msg.health_full"));
         }
         if !take_one(host, p.uuid, &["minecraft:iron_ingot", "chestcavity:iron_scrap"]) {
-            return Err("Precisas de um lingote de ferro no inventário".into());
+            return Err(msg("chestcavity.msg.need_iron"));
         }
         let health = (p.health + self.max_health() * IRON_REPAIR).min(self.max_health());
         host.set_player_status(p.uuid, Some(health), None, None);
@@ -93,7 +94,7 @@ impl Body {
     }
 
     /// Explodes the body with the strength of its explosive organs, which are used up.
-    fn creepy(&mut self, host: &mut dyn Host, p: &Player) -> Result<Option<u32>, String> {
+    fn creepy(&mut self, host: &mut dyn Host, p: &Player) -> Result<Option<u32>, Msg> {
         let explosive = get(&self.scores, "explosive");
         for slot in self.cavity.slots.iter_mut() {
             if slot.as_ref().and_then(|s| organ(&s.id)).is_some_and(|o| o.scores.iter().any(|s| s.0 == "explosive")) {
@@ -108,17 +109,17 @@ impl Body {
         ]
         .into_iter()
         .collect();
-        host.summon(&p.dimension, "minecraft:creeper", p.position, nbt).ok_or_else(|| "Não consegui explodir".to_string())?;
+        host.summon(&p.dimension, "minecraft:creeper", p.position, nbt).ok_or_else(|| msg("chestcavity.msg.no_blast"))?;
         Ok(None)
     }
 
     /// Eats the grass under the feet.
-    fn graze(&mut self, host: &mut dyn Host, p: &Player) -> Result<Option<u32>, String> {
+    fn graze(&mut self, host: &mut dyn Host, p: &Player) -> Result<Option<u32>, Msg> {
         let [x, y, z] = [p.position[0].floor() as i32, p.position[1].floor() as i32 - 1, p.position[2].floor() as i32];
         let left = match host.block([x, y, z]).as_str() {
             "minecraft:grass_block" | "minecraft:mycelium" => "minecraft:dirt",
             "minecraft:crimson_nylium" | "minecraft:warped_nylium" => "minecraft:netherrack",
-            _ => return Err("Não há erva debaixo de ti".into()),
+            _ => return Err(msg("chestcavity.msg.no_grass")),
         };
         host.run_command(&format!("setblock {x} {y} {z} {left}"));
         // ponytail: Chest Cavity chews the grass for a while (the Ruminating effect); here it is eaten at once.
@@ -127,9 +128,9 @@ impl Body {
     }
 
     /// Webs: wool or a cobweb behind the body, and string for what is left of the silk.
-    fn spin(&mut self, host: &mut dyn Host, p: &Player, silk: f32) -> Result<Option<u32>, String> {
+    fn spin(&mut self, host: &mut dyn Host, p: &Player, silk: f32) -> Result<Option<u32>, Msg> {
         if self.food.is_some_and(|f| f.0 < SILK_FOOD) {
-            return Err("Tens pouca fome para tecer".into());
+            return Err(msg("chestcavity.msg.hungry_silk"));
         }
         let (mut silk, mut cost) = (silk, 0.0);
         if silk >= 2.0 {
@@ -150,18 +151,18 @@ impl Body {
             host.give_stack(p.uuid, stack("minecraft:string", 1));
         }
         if cost == 0.0 {
-            return Err("Não há onde tecer".into());
+            return Err(msg("chestcavity.msg.no_spin"));
         }
         self.tire(host, p.uuid, cost);
         Ok(None)
     }
 
     /// Fireballs, bombs and spit: as many as the score says, along where the body looks.
-    fn shoot(&mut self, host: &mut dyn Host, p: &Player, name: &str, level: f32, rng: &mut Rng) -> Result<Option<u32>, String> {
-        let Some(shot) = abilities::shot(name) else { return Err(format!("{name} não se dispara")) };
+    fn shoot(&mut self, host: &mut dyn Host, p: &Player, name: &str, level: f32, rng: &mut Rng) -> Result<Option<u32>, Msg> {
+        let Some(shot) = abilities::shot(name) else { return Err(msg("chestcavity.msg.not_shot").arg(ability_name(name))) };
         let shots = level as u32;
         if shots < 1 {
-            return Err(format!("Precisas de mais {name} para isto"));
+            return Err(msg("chestcavity.msg.need_more").arg(ability_name(name)));
         }
         let aim = abilities::aim(p.yaw, p.pitch);
         let eyes = [p.position[0], p.position[1] + 1.4, p.position[2]];

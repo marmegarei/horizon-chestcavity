@@ -34,7 +34,7 @@ fn the_opener_asks_and_the_next_server_tick_opens_the_screen() {
 
     cc.open_queued(&mut game);
     assert_eq!(game.menu.as_ref().map(Vec::len), Some(27));
-    assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica"));
+    assert_eq!(game.menu_title.as_deref(), Some("Chest Cavity"));
     assert_eq!(game.hurts, [(OVERWORLD.into(), 1, 4.0, "minecraft:generic".into(), None)], "opening a chest hurts, once");
     game.menu = None;
     cc.open_queued(&mut game);
@@ -62,7 +62,7 @@ fn a_mobs_cavity_opens_at_the_tick_and_its_organs_come_out() {
     let &(slot, id, _) = mob_kind("minecraft:zombie").unwrap().slots.first().unwrap();
     cc.ask_mob(me(), ZOMBIE, "minecraft:zombie");
     cc.open_queued(&mut game);
-    assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica de Zombie"));
+    assert_eq!(game.menu_title.as_deref(), Some("Zombie's Chest Cavity"));
     assert_eq!(game.hurts, [(OVERWORLD.into(), ZOMBIE, 4.0, "minecraft:player_attack".into(), Some(1))], "the zombie pays for it");
     assert_eq!(game.menu.as_ref().unwrap()[slot as usize].as_ref().unwrap().item.as_ref(), id);
 
@@ -85,13 +85,13 @@ fn a_mob_without_a_body_and_a_game_without_menus_both_tell_the_player() {
     let (cc, mut game) = world();
     cc.ask_mob(me(), ZOMBIE, "minecraft:villager_of_nowhere");
     cc.open_queued(&mut game);
-    assert_eq!(game.said, ["Villager Of Nowhere não tem cavidade torácica"]);
+    assert_eq!(game.said, ["Villager Of Nowhere has no chest cavity"]);
 
     game.server_menus = false;
     cc.ticks.fetch_add(10, Ordering::Relaxed);
     cc.ask_own(me());
     cc.open_queued(&mut game);
-    assert_eq!(game.said.last().map(String::as_str), Some(NO_SCREEN));
+    assert_eq!(game.said.last().map(String::as_str), Some("Could not open the screen: use /cc list, /cc take <slot> and /cc put"));
     assert!(game.hurts.is_empty(), "nothing opened, nothing paid");
 }
 
@@ -122,7 +122,7 @@ fn a_click_on_a_mob_is_not_taken_for_your_own_chest() {
         if order == 2 {
             assert_eq!(game.menu_title, None, "the item's use a tick later asks for nothing");
         } else {
-            assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica de Zombie"), "order {order}");
+            assert_eq!(game.menu_title.as_deref(), Some("Zombie's Chest Cavity"), "order {order}");
         }
         assert!(game.hurts.iter().all(|h| h.1 == ZOMBIE), "only the zombie paid: {:?}", game.hurts);
     }
@@ -133,13 +133,13 @@ fn a_click_on_a_mob_is_not_taken_for_your_own_chest() {
     cc.ticks.fetch_add(10, Ordering::Relaxed);
     cc.ask_own(me());
     cc.open_queued(&mut game);
-    assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica"));
+    assert_eq!(game.menu_title.as_deref(), Some("Chest Cavity"));
 }
 
 #[test]
 fn an_organ_tells_what_it_is_good_at_in_its_tooltip_and_other_items_say_nothing() {
     let heart = ChestCavity::tooltip_lines("chestcavity:heart");
-    assert!(heart.iter().any(|l| l.plain().starts_with("Vida máxima: +")), "{:?}", heart.iter().map(Text::plain).collect::<Vec<_>>());
-    assert!(heart.iter().any(|l| l.plain().contains("sem coração sangras")));
+    assert!(heart.iter().any(|l| l.plain().starts_with("Max health: +")), "{:?}", heart.iter().map(Text::plain).collect::<Vec<_>>());
+    assert!(heart.iter().any(|l| l.plain().contains("without a heart you bleed")));
     assert!(ChestCavity::tooltip_lines("minecraft:stick").is_empty());
 }

@@ -19,6 +19,9 @@ pub struct Organ {
 pub struct Kind {
     /// (slot, item, count).
     pub slots: &'static [(u8, &'static str, u32)],
+    /// Items that are worth other scores in this type only (its creeper's trunk is its heart and spine): an item id,
+    /// or `*_suffix` for a family of them, and the scores of a full stack. They replace the item's own.
+    pub special: &'static [(&'static str, &'static [(&'static str, f32)])],
     /// Scores the body has whatever its organs.
     pub base: &'static [(&'static str, f32)],
     pub drop_rate: f32,
@@ -80,9 +83,14 @@ impl Cavity {
     pub fn scores(&self, kind: &Kind) -> Scores {
         let mut scores: Scores = kind.base.iter().copied().collect();
         for slot in self.slots.iter().flatten() {
-            let Some(o) = organ(&slot.id) else { continue };
-            let share = (slot.count as f32 / o.stack as f32).min(1.0);
-            for &(k, v) in o.scores {
+            let special = kind.special.iter().find(|(pat, _)| pat.strip_prefix('*').map_or(*pat == slot.id, |end| slot.id.ends_with(end)));
+            let (own, stack) = match (special, organ(&slot.id)) {
+                (Some(&(_, own)), _) => (own, 64),
+                (None, Some(o)) => (o.scores, o.stack),
+                (None, None) => continue,
+            };
+            let share = (slot.count as f32 / stack as f32).min(1.0);
+            for &(k, v) in own {
                 *scores.entry(k).or_default() += v * share;
             }
         }
@@ -129,6 +137,14 @@ mod tests {
         assert_eq!(mob_name("minecraft:cave_spider"), "Cave Spider");
         assert!(mob_kind("minecraft:zombie").is_some_and(|k| !k.slots.is_empty()));
         assert!(mob_kind("minecraft:villager_of_nowhere").is_none());
+        // A creeper's trunk is its heart, and its spine: without it, it has neither.
+        let creeper = mob_kind("minecraft:creeper").expect("creeper");
+        let mut cavity = Cavity::of(creeper);
+        let trunk = cavity.slots.iter().position(|s| s.as_ref().is_some_and(|s| s.id == "minecraft:oak_log")).expect("a trunk");
+        assert!(get(&cavity.scores(creeper), "health") > 0.0 && get(&cavity.scores(creeper), "nerves") > 0.0);
+        cavity.slots[trunk] = None;
+        assert_eq!(get(&cavity.scores(creeper), "health"), 0.0);
+        assert_eq!(get(&cavity.scores(creeper), "nerves"), 0.0);
         // A door is an organ too: one of them makes a chest easy to open.
         let mut cavity = Cavity::of(player_kind());
         cavity.slots[6] = Some(Slot { id: "minecraft:oak_door".into(), count: 1 });

@@ -1,8 +1,9 @@
 //! The chest screen, for any cavity (a player's or a mob's): 27 slots as a chest. Click an organ to take it
 //! out into the player's inventory, an organ of the player's below to put it in. The functions change a
 //! `Cavity` and the player's inventory only; whoever owns the cavity saves it when `changed` says so.
+use crate::texts::{Msg, item_name, msg};
 use chestcavity_shared::cavity::{Cavity, SLOTS, Slot, organ};
-use horizon_client::mod_api::{Host, ItemStack};
+use horizon_client::mod_api::{Host, ItemStack, Text};
 
 pub(crate) const EMPTY_SLOT: &str = "minecraft:gray_stained_glass_pane";
 
@@ -10,12 +11,12 @@ pub(crate) const EMPTY_SLOT: &str = "minecraft:gray_stained_glass_pane";
 #[derive(Debug, Default, PartialEq)]
 pub struct Click {
     pub changed: bool,
-    pub msg: Option<String>,
+    pub msg: Option<Msg>,
 }
 
 impl Click {
-    fn said(msg: impl Into<String>) -> Click {
-        Click { changed: false, msg: Some(msg.into()) }
+    fn said(msg: Msg) -> Click {
+        Click { changed: false, msg: Some(msg) }
     }
     fn done() -> Click {
         Click { changed: true, msg: None }
@@ -58,7 +59,7 @@ pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) 
     let Some(s) = cavity.slots.get(i).cloned().flatten() else { return Click::default() };
     let kept = host.give_stack(uuid, stack(&s.id, s.count)).map_or(0, |left| left.count);
     if kept >= s.count {
-        return Click::said("Sem espaço no inventário");
+        return Click::said(msg("chestcavity.msg.no_space"));
     }
     cavity.slots[i] = (kept > 0).then(|| Slot { id: s.id, count: kept });
     Click::done()
@@ -66,32 +67,35 @@ pub fn take_out(host: &mut dyn Host, uuid: u128, cavity: &mut Cavity, i: usize) 
 
 /// Puts `held`, an organ of the player's, in the first empty slot; `remove` takes it from where it is.
 pub fn put_in(host: &mut dyn Host, cavity: &mut Cavity, held: ItemStack, remove: impl FnOnce(&mut dyn Host, &ItemStack) -> bool) -> Click {
-    let Some(o) = organ(&held.item) else { return Click::said(format!("{} não é um órgão", held.item)) };
+    let Some(o) = organ(&held.item) else { return Click::said(msg("chestcavity.msg.not_organ").plain_arg(&held.item)) };
     if held.count > o.stack {
-        return Click::said(format!("Mete no máximo {} {} de cada vez", o.stack, o.name));
+        return Click::said(msg("chestcavity.msg.max_stack").plain_arg(o.stack).arg(item_name(&o.id, o.name)));
     }
     let Some(i) = cavity.slots.iter().position(Option::is_none) else {
-        return Click::said("Todas as ranhuras estão ocupadas: tira um órgão primeiro");
+        return Click::said(msg("chestcavity.msg.full"));
     };
     if !remove(host, &held) {
-        return Click::said("Essa pilha mudou");
+        return Click::said(msg("chestcavity.msg.stale"));
     }
     cavity.slots[i] = Some(Slot { id: held.item.to_string(), count: held.count });
     Click::done()
 }
 
-/// One line a slot: " 3. Heart", " 4. (vazia)".
-pub fn list(cavity: &Cavity) -> Vec<String> {
+/// One line a slot: " 3. Heart", " 4. (empty)".
+pub fn list(cavity: &Cavity) -> Vec<Text> {
     cavity
         .slots
         .iter()
         .enumerate()
-        .map(|(i, s)| match s {
-            Some(s) => {
-                let name = organ(&s.id).map_or(s.id.as_str(), |o| o.name);
-                if s.count > 1 { format!("{:>2}. {name} x{}", i + 1, s.count) } else { format!("{:>2}. {name}", i + 1) }
+        .map(|(i, s)| {
+            let head = Text::literal(format!("{:>2}. ", i + 1));
+            match s {
+                Some(s) => {
+                    let name = organ(&s.id).map_or_else(|| Text::literal(s.id.clone()), |o| item_name(&o.id, o.name));
+                    if s.count > 1 { head.append(name).append(Text::literal(format!(" x{}", s.count))) } else { head.append(name) }
+                }
+                None => head.append(msg("chestcavity.list.empty").text()),
             }
-            None => format!("{:>2}. (vazia)", i + 1),
         })
         .collect()
 }

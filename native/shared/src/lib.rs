@@ -11,5 +11,6 @@ pub mod describe;
 pub mod drops;
 pub mod effects;
 pub mod food;
+pub mod lang;
 pub mod organs;
 pub mod teleport;

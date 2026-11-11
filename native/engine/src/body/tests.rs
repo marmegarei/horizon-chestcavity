@@ -49,12 +49,12 @@ fn only_organs_go_in_and_a_full_inventory_keeps_them_out() {
     let mut body = Body::of(Cavity::of(player_kind()));
     game.inventory[2] = Some(stack("chestcavity:chest_opener", 1));
     let msg = body.click(&mut game, ME, (SLOTS + 27 + 2) as i32);
-    assert!(msg.is_some_and(|m| m.contains("não é um órgão")));
+    assert!(msg.is_some_and(|m| m.plain().contains("is not an organ")));
     assert!(game.inventory[2].is_some());
 
     game.inventory = vec![Some(stack("minecraft:stone", 1)); 36];
     let i = heart_slot(&body);
-    assert_eq!(body.click(&mut game, ME, i as i32).as_deref(), Some("Sem espaço no inventário"));
+    assert_eq!(body.click(&mut game, ME, i as i32).map(|m| m.plain()).as_deref(), Some("No room in the inventory"));
     assert!(body.cavity.slots[i].is_some(), "the heart stays when it has nowhere to go");
 }
 

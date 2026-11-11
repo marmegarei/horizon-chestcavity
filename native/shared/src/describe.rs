@@ -1,7 +1,9 @@
-//! What an organ is good and bad at, in words (Portuguese), from its scores: what it improves, what it
-//! costs, what happens without it and what ability it gives. Numbers for the scores that change an
-//! attribute come from `effects`, so the text says what the game really does; what the port does not do
-//! yet (most abilities) is marked `idle`.
+//! What an organ is good and bad at, from its scores: what it improves, what it costs, what happens without
+//! it and what ability it gives. Numbers for the scores that change an attribute come from `effects`, so the
+//! text says what the game really does; what the port does not do yet (most abilities) is marked `idle`.
+//! The words are not here: a line is a template (a lang key) and its arguments, and the game fills it in the
+//! language of whoever reads it. The English given with each key is what shows when a language lacks it, and
+//! what the tests read (`Arg::plain`).
 use crate::cavity::Organ;
 use crate::effects;
 
@@ -13,12 +15,79 @@ pub enum Tone {
     Note,
 }
 
+/// Text to show: plain, or a lang key with its English and the arguments its template takes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Arg {
+    Plain(String),
+    Lang { key: String, en: String, args: Vec<Arg> },
+}
+
+impl Arg {
+    fn lang(key: impl Into<String>, en: impl Into<String>, args: Vec<Arg>) -> Arg {
+        Arg::Lang { key: key.into(), en: en.into(), args }
+    }
+
+    /// The English reading, as the game would give it with no language to help.
+    pub fn plain(&self) -> String {
+        match self {
+            Arg::Plain(s) => s.clone(),
+            Arg::Lang { en, args, .. } => fill(en, &args.iter().map(Arg::plain).collect::<Vec<_>>()),
+        }
+    }
+}
+
+/// `%s`, `%1$s` and `%%` of a template, as Minecraft fills them.
+pub fn fill(template: &str, args: &[String]) -> String {
+    let (mut out, mut next) = (String::new(), 0);
+    let mut chars = template.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        let mut digits = String::new();
+        while let Some(d) = chars.peek().copied().filter(char::is_ascii_digit) {
+            digits.push(d);
+            chars.next();
+        }
+        match chars.next() {
+            Some('%') => out.push('%'),
+            Some('$') => {
+                chars.next(); // the `s`
+                out.push_str(digits.parse::<usize>().ok().and_then(|n| args.get(n.wrapping_sub(1))).map_or("", String::as_str));
+            }
+            Some(_) => {
+                out.push_str(args.get(next).map_or("", String::as_str));
+                next += 1;
+            }
+            None => {}
+        }
+    }
+    out
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Line {
     pub tone: Tone,
-    pub text: String,
+    pub text: Arg,
     /// The port gives this no effect yet.
     pub idle: bool,
+}
+
+/// The templates of a line, by lang key, with their English.
+pub const VALUE: (&str, &str) = ("chestcavity.fmt.value", "%1$s: %2$s");
+pub const SAID: (&str, &str) = ("chestcavity.fmt.said", "%1$s %2$s: %3$s");
+pub const ABILITY_LINE: (&str, &str) = ("chestcavity.fmt.ability", "%1$s: %2$s%3$s");
+pub const LEVEL: (&str, &str) = ("chestcavity.fmt.level", " (level %s)");
+pub const REDUCED: (&str, &str) = ("chestcavity.fmt.reduced", "%s reduced");
+pub const CONSEQUENCE: (&str, &str) = ("chestcavity.fmt.consequence", "Consequence: %s");
+pub const STACK: (&str, &str) = ("chestcavity.fmt.stack", "Full effect with %s in the stack; with fewer, proportional");
+pub const IDLE: (&str, &str) = ("chestcavity.fmt.idle", " (no effect yet)");
+/// Every template, for checking the lang files.
+pub const TEMPLATES: [(&str, &str); 8] = [VALUE, SAID, ABILITY_LINE, LEVEL, REDUCED, CONSEQUENCE, STACK, IDLE];
+
+fn tpl(t: (&str, &str), args: Vec<Arg>) -> Arg {
+    Arg::lang(t.0, t.1, args)
 }
 
 /// How a score reads.
@@ -56,86 +125,86 @@ const fn i(key: &'static str, name: &'static str, fx: Fx, flags: u8, missing: &'
 
 static INFO: &[Info] = &[
     // O corpo, o que o jogo aplica.
-    i("health", "Vida máxima", Add, LIVE, "sem coração sangras (dano por segundo, cada vez maior)"),
-    i("strength", "Dano corpo a corpo", Pct, LIVE, ""),
-    i("speed", "Velocidade de movimento", Pct, LIVE, ""),
-    i("nerves", "Velocidade de ataque e de mineração", Pct, LIVE, "sem nervos (espinha) ficas paralisado"),
-    i("luck", "Sorte", Add, LIVE, ""),
-    i("defense", "Defesa óssea", Said("menos dano dos golpes que a armadura cortaria (cada 4 pontos: metade)", "mais dano dos golpes que a armadura cortaria"), LIVE, ""),
-    i("leaping", "Altura do salto", Pct, LIVE, ""),
-    i("swim_speed", "Eficiência a nadar", Pct, LIVE, ""),
-    i("knockback_resistant", "Resistência a recuo", Pct, LIVE, ""),
-    i("knockback_resistance", "Resistência a recuo", Pct, LIVE, ""),
-    i("block_interaction_range", "Alcance de blocos", Add, LIVE, ""),
-    i("entity_interaction_range", "Alcance de ataque", Add, LIVE, ""),
-    i("lightweight", "Leveza", Said("caís mais devagar (menos gravidade)", "és mais pesado (caís mais depressa)"), LIVE, ""),
-    i("ease_of_access", "Acesso fácil", Said("abrir-te o peito não custa dano e dá para abrir mesmo com saúde cheia", ""), LIVE | ABILITY, ""),
-    i("breath_capacity", "Capacidade pulmonar", Said("o fôlego dura mais (2 é o normal)", "o fôlego dura menos"), LIVE, "sem capacidade nenhuma o ar gasta-se 20 vezes mais depressa"),
-    i("filtration", "Filtração", Said("filtra o sangue", "filtra pior o sangue"), LIVE, "com menos filtração do que o normal envenenas-te de tempos a tempos"),
-    i("breath_recovery", "Respiração", Said("recuperas o ar fora de água (2 é o normal)", "recuperas pior o ar"), LIVE, "sem pulmões afogas fora de água"),
-    i("water_breath", "Respiração aquática", Said("respiras debaixo de água (a partir de 0,5 o ar já não desce)", "respiras pior debaixo de água"), LIVE, ""),
-    i("fire_resistant", "Resistência ao fogo", Said("menos dano de fogo e lava (cada 4 pontos: -75%)", "mais dano de fogo"), LIVE, ""),
-    i("glowing", "Brilho", Said("brilhas (visível através das paredes)", ""), LIVE | ABILITY, ""),
+    i("health", "Max health", Add, LIVE, "without a heart you bleed (damage every second, growing)"),
+    i("strength", "Melee damage", Pct, LIVE, ""),
+    i("speed", "Movement speed", Pct, LIVE, ""),
+    i("nerves", "Attack and mining speed", Pct, LIVE, "without nerves (a spine) you are paralysed"),
+    i("luck", "Luck", Add, LIVE, ""),
+    i("defense", "Bone defense", Said("less damage from blows armour would take (every 4 points: half)", "more damage from blows armour would take"), LIVE, ""),
+    i("leaping", "Jump height", Pct, LIVE, ""),
+    i("swim_speed", "Swimming efficiency", Pct, LIVE, ""),
+    i("knockback_resistant", "Knockback resistance", Pct, LIVE, ""),
+    i("knockback_resistance", "Knockback resistance", Pct, LIVE, ""),
+    i("block_interaction_range", "Block reach", Add, LIVE, ""),
+    i("entity_interaction_range", "Attack reach", Add, LIVE, ""),
+    i("lightweight", "Lightness", Said("you fall slower (less gravity)", "you are heavier (you fall faster)"), LIVE, ""),
+    i("ease_of_access", "Easy access", Said("opening your chest costs no damage and works even at full health", ""), LIVE | ABILITY, ""),
+    i("breath_capacity", "Lung capacity", Said("your breath lasts longer (2 is normal)", "your breath lasts less"), LIVE, "with no capacity at all the air runs out 20 times faster"),
+    i("filtration", "Filtration", Said("filters the blood", "filters the blood worse"), LIVE, "with less filtration than normal you get poisoned from time to time"),
+    i("breath_recovery", "Breathing", Said("you recover air out of water (2 is normal)", "you recover air worse"), LIVE, "without lungs you drown out of water"),
+    i("water_breath", "Water breathing", Said("you breathe under water (from 0.5 the air no longer drops)", "you breathe worse under water"), LIVE, ""),
+    i("fire_resistant", "Fire resistance", Said("less fire and lava damage (every 4 points: -75%)", "more fire damage"), LIVE, ""),
+    i("glowing", "Glowing", Said("you glow (visible through walls)", ""), LIVE | ABILITY, ""),
     // O corpo, o que o port ainda não aplica.
-    i("endurance", "Resistência", Said("o exercício dá-te menos fome", "o exercício dá-te mais fome"), LIVE, ""),
-    i("metabolism", "Metabolismo", Said("curas mais depressa à custa da fome", "curas mais devagar"), LIVE, ""),
-    i("digestion", "Digestão", Said("a comida restaura mais fome (1 é o normal)", "a comida restaura menos fome"), LIVE, "sem estômago a comida enjoa-te"),
-    i("nutrition", "Nutrição", Said("a comida dá mais saciedade (4 é o normal)", "a comida dá menos saciedade"), LIVE, "sem intestinos a comida deixa-te com fome"),
-    i("detoxification", "Desintoxicação", Said("os efeitos de poção nocivos duram menos", "os efeitos nocivos duram mais"), 0, ""),
-    i("fire_resistance", "Proteção contra fogo", Said("menos dano de fogo; imune a chão quente com 5, a fogo com 10 e a lava com 15", "mais dano de fogo"), LIVE, ""),
-    i("frost_resistance", "Proteção contra frio", Said("menos dano de congelação; imune com 5", "mais dano de congelação"), LIVE, ""),
-    i("impact_resistant", "Resistência a impactos", Said("menos dano de quedas e de choques contra paredes (cada 4 pontos: -75%)", "mais dano de impacto"), LIVE, ""),
-    i("buoyant", "Flutuação", Said("flutuas enquanto tiveres ar nos pulmões (a tecla Exalar liberta o ar)", "afundas mais depressa"), 0, ""),
-    i("neutral_water_buoyant", "Flutuação neutra", Said("flutuas devagar na água e na lava", ""), 0, ""),
+    i("endurance", "Endurance", Said("exercise makes you less hungry", "exercise makes you hungrier"), LIVE, ""),
+    i("metabolism", "Metabolism", Said("you heal faster at the cost of food", "you heal slower"), LIVE, ""),
+    i("digestion", "Digestion", Said("food restores more hunger (1 is normal)", "food restores less hunger"), LIVE, "without a stomach food makes you sick"),
+    i("nutrition", "Nutrition", Said("food gives more saturation (4 is normal)", "food gives less saturation"), LIVE, "without intestines food leaves you hungry"),
+    i("detoxification", "Detoxification", Said("harmful potion effects last less", "harmful effects last longer"), 0, ""),
+    i("fire_resistance", "Fire protection", Said("less fire damage; immune to hot ground at 5, to fire at 10 and to lava at 15", "more fire damage"), LIVE, ""),
+    i("frost_resistance", "Frost protection", Said("less freezing damage; immune at 5", "more freezing damage"), LIVE, ""),
+    i("impact_resistant", "Impact resistance", Said("less damage from falls and wall crashes (every 4 points: -75%)", "more impact damage"), LIVE, ""),
+    i("buoyant", "Buoyancy", Said("you float while you have air in your lungs (the Exhale key lets the air out)", "you sink faster"), 0, ""),
+    i("neutral_water_buoyant", "Neutral buoyancy", Said("you float slowly in water and lava", ""), 0, ""),
     // Comer.
-    i("herbivorous_digestion", "Digestão de plantas", Said("as plantas restauram mais fome", "as plantas restauram menos fome"), LIVE, ""),
-    i("herbivorous_nutrition", "Nutrição de plantas", Said("as plantas dão mais saciedade", "as plantas dão menos saciedade"), LIVE, ""),
-    i("carnivorous_digestion", "Digestão de carne", Said("a carne restaura mais fome", "a carne restaura menos fome"), LIVE, ""),
-    i("carnivorous_nutrition", "Nutrição de carne", Said("a carne dá mais saciedade", "a carne dá menos saciedade"), LIVE, ""),
-    i("scavenger_digestion", "Digestão de podre", Said("a comida podre restaura mais fome (sem veneno nem fome)", ""), LIVE, ""),
-    i("scavenger_nutrition", "Nutrição de podre", Said("a comida podre dá mais saciedade", ""), LIVE, ""),
-    i("rot_digestion", "Digestão de podre", Said("aproveitas comida podre", ""), LIVE | ABILITY, ""),
-    i("rotgut", "Intestino de podre", Said("a comida podre alimenta-te", ""), LIVE | ABILITY, ""),
-    i("iron_gut", "Estômago de ferro", Said("a comida não te aplica efeitos nocivos", ""), ABILITY, ""),
-    i("photosynthesis", "Fotossíntese", Said("à luz do dia recuperas fome e vida", ""), LIVE | ABILITY, ""),
-    i("crystalsynthesis", "Cristalossíntese", Said("perto de cristais do End recuperas fome e vida (se o cristal explodir, sofres)", ""), LIVE | ABILITY, ""),
-    i("crystallization", "Cristalização", Said("perto de cristais do End regeneras vida", ""), ABILITY, ""),
+    i("herbivorous_digestion", "Plant digestion", Said("plants restore more hunger", "plants restore less hunger"), LIVE, ""),
+    i("herbivorous_nutrition", "Plant nutrition", Said("plants give more saturation", "plants give less saturation"), LIVE, ""),
+    i("carnivorous_digestion", "Meat digestion", Said("meat restores more hunger", "meat restores less hunger"), LIVE, ""),
+    i("carnivorous_nutrition", "Meat nutrition", Said("meat gives more saturation", "meat gives less saturation"), LIVE, ""),
+    i("scavenger_digestion", "Rot digestion", Said("rotten food restores more hunger (no poison or hunger)", ""), LIVE, ""),
+    i("scavenger_nutrition", "Rot nutrition", Said("rotten food gives more saturation", ""), LIVE, ""),
+    i("rot_digestion", "Rot digestion", Said("you make use of rotten food", ""), LIVE | ABILITY, ""),
+    i("rotgut", "Rotgut", Said("rotten food nourishes you", ""), LIVE | ABILITY, ""),
+    i("iron_gut", "Iron gut", Said("food applies no harmful effects to you", ""), ABILITY, ""),
+    i("photosynthesis", "Photosynthesis", Said("in daylight you recover hunger and health", ""), LIVE | ABILITY, ""),
+    i("crystalsynthesis", "Crystalsynthesis", Said("near End Crystals you recover hunger and health (if the crystal explodes, you suffer)", ""), LIVE | ABILITY, ""),
+    i("crystallization", "Crystallization", Said("near End Crystals you regenerate health", ""), ABILITY, ""),
     // Habilidades ativas (com tecla).
-    i("grazing", "Pastar", Said("comes a relva debaixo de ti (ativa, tecla V ou /cc ability grazing)", ""), LIVE | ABILITY, ""),
-    i("eat_the_rich", "Ruminar blocos", Said("ruminas blocos em vez de relva (ativa)", ""), ABILITY, ""),
-    i("iron_repair", "Reparação com ferro", Said("gastas um lingote de ferro para recuperar um quarto da vida (ativa, tecla V ou /cc ability iron_repair)", ""), LIVE | ABILITY, ""),
-    i("furnace_powered", "Fornalha interior", Said("queimas o combustível da mão para ganhar energia (ativa)", ""), ABILITY, ""),
-    i("silk", "Seda", Said("teces teias e fio atrás de ti (ativa, tecla V ou /cc ability silk)", ""), LIVE | ABILITY, ""),
-    i("pyromancy", "Piromancia", Said("cospes bolas de fogo, uma por ponto (ativa, tecla R ou /cc ability pyromancy)", ""), LIVE | ABILITY, ""),
-    i("ghastly", "Ghastly", Said("disparas bolas de fogo de ghast, uma por ponto (ativa, tecla R ou /cc ability ghastly)", ""), LIVE | ABILITY, ""),
-    i("shulker_bullets", "Balas de shulker", Said("disparas balas teleguiadas (ativa)", ""), ABILITY, ""),
-    i("forceful_spit", "Cuspo forte", Said("cospes projéteis com força, um por ponto (ativa, tecla R ou /cc ability forceful_spit)", ""), LIVE | ABILITY, ""),
-    i("dragon_breath", "Sopro de dragão", Said("cospes sopro de dragão (ativa)", ""), ABILITY, ""),
-    i("dragon_bombs", "Bombas de dragão", Said("lanças bolas de fogo de dragão, uma por ponto (ativa, tecla R ou /cc ability dragon_bombs)", ""), LIVE | ABILITY, ""),
-    i("creepy", "Creepy", Said("explodes como um creeper, com a força dos órgãos explosivos, que se gastam (ativa, tecla R ou /cc ability creepy)", ""), LIVE | ABILITY, ""),
-    i("explosive", "Explosivo", Said("aumenta a potência da explosão do apêndice de creeper", ""), LIVE | ABILITY | BIG, ""),
-    i("flight", "Voo", Said("podes voar como em criativo (duplo salto)", ""), LIVE | ABILITY, ""),
+    i("grazing", "Grazing", Said("you eat the grass under you (active, key V or /cc ability grazing)", ""), LIVE | ABILITY, ""),
+    i("eat_the_rich", "Block grazing", Said("you chew blocks instead of grass (active)", ""), ABILITY, ""),
+    i("iron_repair", "Iron repair", Said("you spend an iron ingot to recover a quarter of your health (active, key V or /cc ability iron_repair)", ""), LIVE | ABILITY, ""),
+    i("furnace_powered", "Inner furnace", Said("you burn the fuel in your hand to gain energy (active)", ""), ABILITY, ""),
+    i("silk", "Silk", Said("you spin webs and string behind you (active, key V or /cc ability silk)", ""), LIVE | ABILITY, ""),
+    i("pyromancy", "Pyromancy", Said("you spit fireballs, one per point (active, key R or /cc ability pyromancy)", ""), LIVE | ABILITY, ""),
+    i("ghastly", "Ghastly", Said("you fire ghast fireballs, one per point (active, key R or /cc ability ghastly)", ""), LIVE | ABILITY, ""),
+    i("shulker_bullets", "Shulker bullets", Said("you fire homing bullets (active)", ""), ABILITY, ""),
+    i("forceful_spit", "Forceful spit", Said("you spit projectiles with force, one per point (active, key R or /cc ability forceful_spit)", ""), LIVE | ABILITY, ""),
+    i("dragon_breath", "Dragon breath", Said("you spit dragon breath (active)", ""), ABILITY, ""),
+    i("dragon_bombs", "Dragon bombs", Said("you throw dragon fireballs, one per point (active, key R or /cc ability dragon_bombs)", ""), LIVE | ABILITY, ""),
+    i("creepy", "Creepy", Said("you explode like a creeper, as hard as your explosive organs, which are used up (active, key R or /cc ability creepy)", ""), LIVE | ABILITY, ""),
+    i("explosive", "Explosive", Said("adds to the power of the creeper appendix explosion", ""), LIVE | ABILITY | BIG, ""),
+    i("flight", "Flight", Said("you can fly as in creative (double jump)", ""), LIVE | ABILITY, ""),
     // Ao atacar e ao ser atacado.
-    i("venomous", "Venenoso", Said("o teu soco (mão vazia) envenena o alvo", ""), LIVE | ABILITY, ""),
-    i("launching", "Lançamento", Said("os teus golpes lançam o alvo para o ar", ""), LIVE | ABILITY, ""),
-    i("arrow_dodging", "Esquiva de flechas", Said("teletransportas-te para esquivar flechas e projéteis (descansa 10 s)", ""), LIVE | ABILITY, ""),
-    i("withered", "Resistência a Wither", Said("o efeito Wither dura menos", ""), ABILITY, ""),
-    i("panic", "Pânico", Said("ao sofreres dano entras em pânico (efeito temporário)", ""), ABILITY, ""),
-    i("resonance", "Ressonância", Said("ao seres atingido, soltas uma explosão ressonante", ""), ABILITY, ""),
-    i("shrieking", "Grito", Said("ao seres atingido, soltas uma onda de grito sculk", ""), ABILITY, ""),
-    i("cluster_explode", "Explosão em cacho", Said("ao seres atingido, explodes em bombas de fragmentação", ""), ABILITY, ""),
+    i("venomous", "Venomous", Said("your bare-handed punch poisons the target", ""), LIVE | ABILITY, ""),
+    i("launching", "Launching", Said("your blows throw the target into the air", ""), LIVE | ABILITY, ""),
+    i("arrow_dodging", "Arrow dodging", Said("you teleport away from arrows and projectiles (rests 10 s)", ""), LIVE | ABILITY, ""),
+    i("withered", "Wither resistance", Said("the Wither effect lasts less", ""), ABILITY, ""),
+    i("panic", "Panic", Said("when you take damage you panic (temporary effect)", ""), ABILITY, ""),
+    i("resonance", "Resonance", Said("when you are hit you release a resonant blast", ""), ABILITY, ""),
+    i("shrieking", "Shrieking", Said("when you are hit you release a sculk shriek wave", ""), ABILITY, ""),
+    i("cluster_explode", "Cluster explosion", Said("when you are hit you explode into cluster bombs", ""), ABILITY, ""),
     // Os órgãos que mexem nos órgãos.
-    i("regrowth", "Regeneração de órgãos", Said("os órgãos perdidos voltam a crescer", ""), ABILITY, ""),
-    i("autophagy", "Autofagia", Said("consomes os teus órgãos para te alimentares", ""), ABILITY, ""),
-    i("tumor_autophagy", "Autofagia de tumores", Said("consomes tumores para te alimentares", ""), ABILITY, ""),
-    i("tumor_hunting", "Caça-tumores", Said("procuras e consomes tumores", ""), ABILITY, ""),
-    i("sculk_infection", "Infeção sculk", Said("infetas os órgãos com sculk", ""), ABILITY, ""),
+    i("regrowth", "Organ regrowth", Said("lost organs grow back", ""), ABILITY, ""),
+    i("autophagy", "Autophagy", Said("you consume your own organs to feed yourself", ""), ABILITY, ""),
+    i("tumor_autophagy", "Tumor autophagy", Said("you consume tumors to feed yourself", ""), ABILITY, ""),
+    i("tumor_hunting", "Tumor hunting", Said("you seek out and consume tumors", ""), ABILITY, ""),
+    i("sculk_infection", "Sculk infection", Said("you infect organs with sculk", ""), ABILITY, ""),
     // O que custa.
-    i("buff_purging", "Purga de efeitos", Said("os efeitos positivos duram menos", ""), BAD, ""),
-    i("hydroallergenic", "Hidroalergia", Said("levas dano ao tocar em água ou chuva (muito mais submerso)", ""), LIVE | BAD, ""),
-    i("water_allergy", "Alergia à água", Said("levas dano em água ou chuva", ""), BAD, ""),
-    i("water_weakness", "Fraqueza na água", Said("menos ataque e mineração dentro de água", ""), BAD, ""),
-    i("hydrophobia", "Hidrofobia", Said("na água ou chuva és teletransportado ao acaso", ""), LIVE | BAD, ""),
+    i("buff_purging", "Buff purging", Said("beneficial effects last less", ""), BAD, ""),
+    i("hydroallergenic", "Hydroallergy", Said("you take damage touching water or rain (much more when submerged)", ""), LIVE | BAD, ""),
+    i("water_allergy", "Water allergy", Said("you take damage in water or rain", ""), BAD, ""),
+    i("water_weakness", "Water weakness", Said("less attack and mining speed in water", ""), BAD, ""),
+    i("hydrophobia", "Hydrophobia", Said("in water or rain you are teleported at random", ""), LIVE | BAD, ""),
 ];
 
 /// Whether the text knows the score `key`.
@@ -143,13 +212,19 @@ pub fn knows(key: &str) -> bool {
     INFO.iter().any(|i| i.key == key)
 }
 
-/// A number the way a Portuguese player reads it: two decimals at most, a comma.
+/// A number the way a player reads it: two decimals at most. (The decimal separator is the language's job: the
+/// game's translation does not touch numbers, so a comma goes in `chestcavity.fmt.*` only if a language wants it.)
 fn num(x: f64) -> String {
-    format!("{}", (x * 100.0).round() / 100.0).replace('.', ",")
+    format!("{}", (x * 100.0).round() / 100.0)
 }
 
 fn signed(x: f64) -> String {
     if x < 0.0 { format!("-{}", num(-x)) } else { format!("+{}", num(x)) }
+}
+
+/// The text a score says about itself: its lang key and its English.
+fn say(key: &str, what: &str, en: &str) -> Arg {
+    Arg::lang(format!("chestcavity.score.{key}.{what}"), en, Vec::new())
 }
 
 /// What `organ` is good and bad at, best first: what it improves, what it costs, its abilities, then what
@@ -159,20 +234,28 @@ pub fn describe(organ: &Organ) -> Vec<Line> {
     for &(key, value) in organ.scores {
         let v = f64::from(value);
         let Some(info) = INFO.iter().find(|i| i.key == key) else {
-            notes.push(Line { tone: Tone::Note, text: format!("{key}: {}", num(v)), idle: true });
+            notes.push(Line { tone: Tone::Note, text: tpl(VALUE, vec![Arg::Plain(key.to_string()), Arg::Plain(num(v))]), idle: true });
             continue;
         };
         let live = info.flags & LIVE != 0;
+        let name = say(key, "name", info.name);
         let text = match info.fx {
-            Add => format!("{}: {}", info.name, signed(v * effects::rate(key).unwrap_or(1.0))),
-            Pct => format!("{}: {}%", info.name, signed(v * effects::rate(key).unwrap_or(1.0) * 100.0)),
+            Add => tpl(VALUE, vec![name, Arg::Plain(signed(v * effects::rate(key).unwrap_or(1.0)))]),
+            Pct => tpl(VALUE, vec![name, Arg::Plain(format!("{}%", signed(v * effects::rate(key).unwrap_or(1.0) * 100.0)))]),
             Said(up, down) if info.flags & ABILITY != 0 => {
-                let level = if v > 1.0 && info.flags & BIG == 0 { format!(" (nível {})", num(v)) } else { String::new() };
-                format!("{}: {}{level}", info.name, if v >= 0.0 || down.is_empty() { up } else { down })
+                let level = if v > 1.0 && info.flags & BIG == 0 { tpl(LEVEL, vec![Arg::Plain(num(v))]) } else { Arg::Plain(String::new()) };
+                let said = if v >= 0.0 || down.is_empty() { say(key, "up", up) } else { say(key, "down", down) };
+                tpl(ABILITY_LINE, vec![name, said, level])
             }
             Said(up, down) => {
-                let said = if v >= 0.0 { up.to_string() } else if down.is_empty() { format!("{} reduzido", info.name) } else { down.to_string() };
-                format!("{} {}: {said}", info.name, signed(v))
+                let said = if v >= 0.0 {
+                    say(key, "up", up)
+                } else if down.is_empty() {
+                    tpl(REDUCED, vec![say(key, "name", info.name)])
+                } else {
+                    say(key, "down", down)
+                };
+                tpl(SAID, vec![name, Arg::Plain(signed(v)), said])
             }
         };
         let tone = if info.flags & BAD != 0 {
@@ -191,14 +274,32 @@ pub fn describe(organ: &Organ) -> Vec<Line> {
             _ => abilities.push(line),
         }
         if live && v > 0.0 && !info.missing.is_empty() {
-            notes.push(Line { tone: Tone::Note, text: format!("Consequência: {}", info.missing), idle: false });
+            notes.push(Line { tone: Tone::Note, text: tpl(CONSEQUENCE, vec![say(key, "missing", info.missing)]), idle: false });
         }
     }
     if organ.stack > 1 {
-        notes.push(Line { tone: Tone::Note, text: format!("Efeito completo com {} na pilha; com menos, proporcional", organ.stack), idle: false });
+        notes.push(Line { tone: Tone::Note, text: tpl(STACK, vec![Arg::Plain(organ.stack.to_string())]), idle: false });
     }
     notes.dedup();
     [better, worse, abilities, notes].concat()
+}
+
+/// The lang keys the scores' texts use, with their English: name, up, down and missing of each.
+pub fn score_texts() -> Vec<(String, &'static str)> {
+    let mut out = Vec::new();
+    for i in INFO {
+        out.push((format!("chestcavity.score.{}.name", i.key), i.name));
+        if let Said(up, down) = &i.fx {
+            out.push((format!("chestcavity.score.{}.up", i.key), *up));
+            if !down.is_empty() {
+                out.push((format!("chestcavity.score.{}.down", i.key), *down));
+            }
+        }
+        if !i.missing.is_empty() {
+            out.push((format!("chestcavity.score.{}.missing", i.key), i.missing));
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -207,8 +308,8 @@ mod tests {
     use crate::cavity::organ;
     use crate::organs::ORGANS;
 
-    fn text(lines: &[Line], tone: Tone) -> Vec<&str> {
-        lines.iter().filter(|l| l.tone == tone).map(|l| l.text.as_str()).collect()
+    fn text(lines: &[Line], tone: Tone) -> Vec<String> {
+        lines.iter().filter(|l| l.tone == tone).map(|l| l.text.plain()).collect()
     }
 
     #[test]
@@ -234,20 +335,20 @@ mod tests {
         let muscle = organ("chestcavity:muscle").expect("muscle");
         let lines = describe(muscle);
         let better = text(&lines, Tone::Better);
-        assert!(better.iter().any(|l| l.starts_with("Dano corpo a corpo: +")), "{better:?}");
-        assert!(better.iter().any(|l| l.starts_with("Velocidade de movimento: +")), "{better:?}");
-        assert!(lines.iter().any(|l| l.text.starts_with("Efeito completo com")), "a stack says how it counts");
+        assert!(better.iter().any(|l| l.starts_with("Melee damage: +")), "{better:?}");
+        assert!(better.iter().any(|l| l.starts_with("Movement speed: +")), "{better:?}");
+        assert!(lines.iter().any(|l| l.text.plain().starts_with("Full effect with")), "a stack says how it counts");
 
         // The heart is what keeps you from bleeding; its text says so, and it is applied.
         let heart = describe(organ("chestcavity:heart").expect("heart"));
-        assert!(text(&heart, Tone::Better).iter().any(|l| l.starts_with("Vida máxima: +")));
-        assert!(text(&heart, Tone::Note).iter().any(|l| l.contains("sem coração sangras")));
+        assert!(text(&heart, Tone::Better).iter().any(|l| l.starts_with("Max health: +")));
+        assert!(text(&heart, Tone::Note).iter().any(|l| l.contains("without a heart you bleed")));
         assert!(heart.iter().filter(|l| l.tone == Tone::Better).all(|l| !l.idle));
 
         // An ability the port does not give yet says so.
         let bullets = ORGANS.iter().find(|o| o.scores.iter().any(|s| s.0 == "shulker_bullets")).expect("a shulker organ");
         let lines = describe(bullets);
-        assert!(lines.iter().any(|l| l.tone == Tone::Ability && l.idle && l.text.starts_with("Balas de shulker:")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.tone == Tone::Ability && l.idle && l.text.plain().starts_with("Shulker bullets:")), "{lines:?}");
         // And one it does give says nothing of the kind.
         let silk = ORGANS.iter().find(|o| o.scores.iter().any(|s| s.0 == "silk")).expect("a silk organ");
         assert!(describe(silk).iter().filter(|l| l.tone == Tone::Ability).all(|l| !l.idle));
@@ -258,14 +359,23 @@ mod tests {
         let kidney = ORGANS.iter().find(|o| o.id == "chestcavity:ender_kidney").expect("ender kidney");
         let lines = describe(kidney);
         let worse = text(&lines, Tone::Worse);
-        assert!(worse.iter().any(|l| l.starts_with("Hidroalergia")), "{worse:?}");
-        assert!(worse.iter().any(|l| l.starts_with("Hidrofobia")), "{worse:?}");
+        assert!(worse.iter().any(|l| l.starts_with("Hydroallergy")), "{worse:?}");
+        assert!(worse.iter().any(|l| l.starts_with("Hydrophobia")), "{worse:?}");
     }
 
     #[test]
-    fn numbers_read_as_a_portuguese_player_reads_them() {
-        assert_eq!(signed(12.5), "+12,5");
-        assert_eq!(signed(-0.1), "-0,1");
+    fn numbers_read_with_two_decimals_at_most() {
+        assert_eq!(signed(12.5), "+12.5");
+        assert_eq!(signed(-0.1), "-0.1");
         assert_eq!(signed(4.0), "+4");
+        assert_eq!(signed(1.0 / 3.0), "+0.33");
+    }
+
+    #[test]
+    fn templates_fill_like_minecrafts() {
+        let args = ["a".to_string(), "b".to_string()];
+        assert_eq!(fill("%1$s: %2$s", &args), "a: b");
+        assert_eq!(fill("%s-%s 100%%", &args), "a-b 100%");
+        assert_eq!(fill("%2$s %1$s", &args), "b a");
     }
 }

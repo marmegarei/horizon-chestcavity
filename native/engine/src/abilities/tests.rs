@@ -28,12 +28,12 @@ fn a_body_without_the_organ_has_no_ability_and_a_used_one_rests() {
     let mut game = Fake::new();
     let mut body = Body::of(Cavity::of(player_kind()));
     let err = body.activate(&mut game, &player(20.0), ability("pyromancy"), &mut Rng(1)).unwrap_err();
-    assert!(err.contains("não tem"), "{err}");
+    assert!(err.plain().contains("has no"), "{err:?}");
 
     let mut body = body_with("chestcavity:active_blaze_rod", 3);
     body.activate(&mut game, &player(20.0), ability("pyromancy"), &mut Rng(1)).unwrap();
     let err = body.activate(&mut game, &player(20.0), ability("pyromancy"), &mut Rng(1)).unwrap_err();
-    assert!(err.contains("a recuperar"), "{err}");
+    assert!(err.plain().contains("recovering"), "{err:?}");
     body.ticks += 78;
     assert!(body.activate(&mut game, &player(20.0), ability("pyromancy"), &mut Rng(1)).is_ok(), "it is ready again after its rest");
 }
@@ -58,10 +58,10 @@ fn iron_mends_a_quarter_of_the_health_and_one_ingot_is_used() {
     let plating = ORGANS.iter().find(|o| o.id == "chestcavity:golem_plating").expect("golem plating");
     let mut body = body_with(plating.id, plating.stack);
     // Nothing to mend with.
-    assert!(body.activate(&mut game, &player(10.0), ability("iron_repair"), &mut Rng(1)).unwrap_err().contains("lingote"));
+    assert!(body.activate(&mut game, &player(10.0), ability("iron_repair"), &mut Rng(1)).unwrap_err().plain().contains("iron ingot"));
     game.inventory[3] = Some(stack("minecraft:iron_ingot", 5));
     // Already healthy.
-    assert!(body.activate(&mut game, &player(20.0), ability("iron_repair"), &mut Rng(1)).unwrap_err().contains("cheia"));
+    assert!(body.activate(&mut game, &player(20.0), ability("iron_repair"), &mut Rng(1)).unwrap_err().plain().contains("already full"));
     body.activate(&mut game, &player(10.0), ability("iron_repair"), &mut Rng(1)).unwrap();
     assert_eq!(game.statuses.last().and_then(|s| s.0), Some(15.0));
     let ingots: u32 = game.inventory.iter().flatten().filter(|s| &*s.item == "minecraft:iron_ingot").map(|s| s.count).sum();
@@ -84,7 +84,7 @@ fn grazing_eats_the_grass_under_the_feet_and_nothing_else() {
     let mut game = Fake::new();
     let mut body = body_with("chestcavity:herbivore_rumen", 1);
     body.food = Some((10, 0.0, 0.0));
-    assert!(body.activate(&mut game, &player(20.0), ability("grazing"), &mut Rng(1)).unwrap_err().contains("erva"));
+    assert!(body.activate(&mut game, &player(20.0), ability("grazing"), &mut Rng(1)).unwrap_err().plain().contains("grass"));
     game.blocks.insert([0, 63, 0], "minecraft:grass_block".into());
     body.activate(&mut game, &player(20.0), ability("grazing"), &mut Rng(1)).unwrap();
     assert_eq!(game.commands, ["setblock 0 63 0 minecraft:dirt"]);
@@ -116,7 +116,7 @@ fn a_key_asks_and_the_server_tick_sets_the_ability_off_for_a_player_the_engine_h
     // A named ability that can't be used says why; a group stays quiet.
     cc.ask_ability(ME, "pyromancy");
     cc.run_abilities(&mut game);
-    assert!(game.said.last().is_some_and(|l| l.contains("não tem")), "{:?}", game.said);
+    assert!(game.said.last().is_some_and(|l| l.contains("has no")), "{:?}", game.said);
     let said = game.said.len();
     cc.ask_ability(ME, "attack");
     cc.run_abilities(&mut game);

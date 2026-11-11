@@ -25,7 +25,7 @@ pub struct Hit {
 }
 
 /// "123e4567-e89b-12d3-a456-426614174000": how a command names an entity by its uuid.
-fn uuid_text(id: u128) -> String {
+pub(crate) fn uuid_text(id: u128) -> String {
     format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", (id >> 96) as u32, (id >> 80) as u16, (id >> 64) as u16, (id >> 48) as u16, id as u64 & 0xffff_ffff_ffff)
 }
 

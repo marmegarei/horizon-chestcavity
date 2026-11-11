@@ -255,7 +255,9 @@ def add_organs():
 
 # ---------------------------------------------------------------- chest cavity types
 
-kinds = {}  # name -> dict(slots=[(pos, item, count)], base={}, drop=float, boss=bool)
+kinds = {}  # name -> dict(slots=[(pos, item, count)], special=[(item or "*suffix", scores)], base={}, drop=float, boss=bool)
+# The item tags the types' exceptional organs name, as the end of an item id.
+TAG_PATTERNS = {"minecraft:leaves": "*_leaves", "minecraft:logs": "*_log"}
 
 
 def stack_of(full):
@@ -279,7 +281,18 @@ def add_kinds_original():
                 warn(f"type {rel}: unknown item {e['item']}")
                 continue
             slots.append((e["position"], item, e.get("count", stack_of(item))))
-        kinds[rel] = dict(slots=slots,
+        special = []
+        for e in d.get("exceptionalOrgans", []):
+            ing = e["ingredient"]
+            if "item" in ing:
+                pat = remap_item(ing["item"])
+            else:
+                pat = TAG_PATTERNS.get(ing.get("tag"))
+            if pat is None:
+                warn(f"type {rel}: exceptional organ {ing} not understood")
+                continue
+            special.append((pat, {score_id(v["id"]): float(v["value"]) for v in e["value"]}))
+        kinds[rel] = dict(slots=slots, special=special,
                           base={score_id(s["id"]): float(s["value"]) for s in d.get("baseOrganScores", [])},
                           drop=float(d.get("dropRateMultiplier", 1)), boss=bool(d.get("bossChestCavity")))
 
@@ -443,7 +456,18 @@ def write_items():
             decl["max_stack_size"] = it["stack"]
         dump(OUT_DATA / NS / f"horizon/item/{name}.json", decl)
         lang[f"item.{NS}.{name}"] = it["name"]
-    dump(OUT_ASSETS / "lang/en_us.json", lang)
+    write_lang(lang)
+
+
+def write_lang(items_en):
+    """The mod's lang files: item names plus the mod's own texts (tools/lang). Portuguese (both spellings) is
+    kept by hand: its item names are tools/lang/pt_pt.items.json."""
+    here = Path(__file__).resolve().parent / "lang"
+    extra = lambda code: load(here / f"{code}.extra.json")
+    dump(OUT_ASSETS / "lang/en_us.json", {**items_en, **extra("en_us")})
+    pt = {**load(here / "pt_pt.items.json"), **extra("pt_pt")}
+    for code in ("pt_pt", "pt_br"):
+        dump(OUT_ASSETS / f"lang/{code}.json", pt)
 
 
 def write_creative_tab():
@@ -481,7 +505,8 @@ def write_rust():
         lines.append(f"    // {k}")
         d = kinds[k]
         slots = ", ".join(f"({p}, {rs_str(i)}, {c})" for p, i, c in sorted(d["slots"]))
-        lines.append(f"    Kind {{ slots: &[{slots}], base: {rs_scores(d['base'])}, "
+        special = ", ".join(f"({rs_str(pat)}, {rs_scores(sc)})" for pat, sc in d.get("special", []))
+        lines.append(f"    Kind {{ slots: &[{slots}], special: &[{special}], base: {rs_scores(d['base'])}, "
                      f"drop_rate: {d['drop']:g}_f32, boss: {str(d['boss']).lower()} }},")
     lines += ["];", "", "/// Mobs that drop organs, with their type's index in KINDS.",
               "pub static MOBS: &[(&str, usize)] = &["]

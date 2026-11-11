@@ -5,19 +5,22 @@ Astro Adds content) to [Horizon](https://github.com/horizon-rust/horizon), Minec
 Every player and mob has organs in their chest. Open it with the Chest Opener, swap organs, and live
 with the consequences.
 
-Status: version 0.6.2, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
+Status: version 0.7.0, built against Horizon Nightly 2026-11-08 (`fdc87ae`). Not everything of the
 original is there yet: see [docs/nao-implementado.md](docs/nao-implementado.md) (in Portuguese).
 
 ## What works
 
 - **Chest Opener**: right click in the air opens your own chest, on a mob opens its own (each species
-  has its organs). Opening hurts 4, unless the chest is easy to open (doors count as organs).
+  has its organs). Opening hurts 4, unless the chest is easy to open (doors count as organs). What you take out of a mob
+  changes it: no heart and it bleeds to death, no spine and it cannot move, no lungs and it drowns.
 - **Organs**: 254 organs and 291 items, tooltips with what each is better and worse at, a creative tab
   with all of them, mobs drop their organs.
 - **Body**: eating (digestion, nutrition), breathing (lungs, gills), defenses, kidneys, heart, light,
   water, End Crystals, blows that launch or poison, wings.
 - **Abilities**: key **V** (utility) and **R** (attacks), or `/cc ability <name>`: iron repair, grazing,
   silk, pyromancy, ghastly, dragon bombs, forceful spit, creeper blast.
+- **Languages**: English and Portuguese (`pt_pt`, `pt_br`), following the game's language: item names, organ
+  descriptions, messages. Other languages show English.
 - Commands: `/cc`, `/cc list`, `/cc take <slot>`, `/cc put`, `/cc ability <name>`; for operators
   `/cc open` and `/cc reset`.
 

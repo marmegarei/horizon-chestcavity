@@ -25,7 +25,7 @@ fn a_mobs_organs_come_out_and_go_back_in() {
     // Its screen shows its type's organs under its name.
     let cavity = load(&mut game, ZOMBIE, "minecraft:zombie").unwrap();
     assert_eq!(open_menu(&mut game, ME, &cavity, "minecraft:zombie"), Some(5));
-    assert_eq!(game.menu_title.as_deref(), Some("Cavidade torácica de Zombie"));
+    assert_eq!(game.menu_title.as_deref(), Some("Zombie's Chest Cavity"));
     assert_eq!(game.menu.as_ref().unwrap()[slot].as_ref().unwrap().item.as_ref(), id);
 
     // Take the organ out: it is in the player's inventory, the screen shows a pane and the mob keeps it that way.
@@ -49,6 +49,6 @@ fn a_mob_without_a_body_or_gone_gives_nothing() {
     // The zombie is gone by the time of the click: no organ is handed out.
     game.mobs.clear();
     let said = click(&mut game, ME, ZOMBIE, "minecraft:zombie", slot as i32);
-    assert_eq!(said.as_deref(), Some("Zombie desapareceu"));
+    assert_eq!(said.map(|m| m.plain()).as_deref(), Some("Zombie disappeared"));
     assert!(game.inventory.iter().all(Option::is_none));
 }

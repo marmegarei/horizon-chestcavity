@@ -52,6 +52,30 @@ pub fn attribute_bases(now: &Scores, normal: &Scores) -> Vec<(&'static str, f64)
     out
 }
 
+/// What a mob's organs add to its own attributes, whatever their vanilla bases: (attribute, amount, operation) of a
+/// command's `attribute <mob> <attribute> modifier add`. Without a spine it can't move at all.
+pub fn modifiers(now: &Scores, normal: &Scores) -> Vec<(&'static str, f64, &'static str)> {
+    const MOBS: &[&str] = &["minecraft:max_health", "minecraft:attack_damage", "minecraft:movement_speed", "minecraft:knockback_resistance"];
+    let mut sums: Vec<(&'static str, bool, f64)> = Vec::new();
+    for &(score, attr, _, multiplies, per) in ATTRIBUTES.iter().filter(|a| MOBS.contains(&a.1)) {
+        let d = f64::from(get(now, score) - get(normal, score)) * per;
+        match sums.iter_mut().find(|e| e.0 == attr) {
+            Some(e) => e.2 += d,
+            None => sums.push((attr, multiplies, d)),
+        }
+    }
+    let paralysed = get(normal, "nerves") > 0.0 && get(now, "nerves") <= 0.0;
+    let mut out: Vec<_> = sums
+        .into_iter()
+        .filter(|&(attr, _, d)| d != 0.0 && !(paralysed && attr == "minecraft:movement_speed"))
+        .map(|(attr, multiplies, d)| (attr, d, if multiplies { "add_multiplied_base" } else { "add_value" }))
+        .collect();
+    if paralysed {
+        out.push(("minecraft:movement_speed", -1.0, "add_multiplied_total"));
+    }
+    out
+}
+
 /// Something an organ does to the body on the second's beat.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -97,8 +121,8 @@ const WATER_SPARE: f32 = 260.0;
 /// when breathing and eating, not here.)
 pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, progress: &mut Progress, env: &Env) -> Vec<Action> {
     let mut out = Vec::new();
-    // Heartbleed (HEARTBLEED_RATE 20 ticks): damage that grows each second.
-    if get(now, "health") <= 0.0 {
+    // Heartbleed (HEARTBLEED_RATE 20 ticks): damage that grows each second, for a body that needs a heart.
+    if get(now, "health") <= 0.0 && get(normal, "health") > 0.0 {
         progress.bleed += 1;
         out.push(Action::Damage { amount: progress.bleed as f32, kind: "minecraft:generic" });
     } else {
@@ -145,23 +169,12 @@ pub fn periodic(now: &Scores, normal: &Scores, seconds: u64, progress: &mut Prog
     out
 }
 
-/// The scores the summary shows, with their names.
-const SHOWN: &[(&str, &str)] = &[
-    ("health", "Vida"), ("strength", "Força"), ("speed", "Velocidade"), ("defense", "Defesa"),
-    ("nerves", "Nervos"), ("filtration", "Filtração"), ("breath_recovery", "Respiração"),
-    ("digestion", "Digestão"), ("nutrition", "Nutrição"), ("luck", "Sorte"),
-];
+/// The scores the summary shows.
+pub const SHOWN: &[&str] = &["health", "strength", "speed", "defense", "nerves", "filtration", "breath_recovery", "digestion", "nutrition", "luck"];
 
-/// "Health 1.0 (-1.0)": each shown score, with how far it is from normal.
-pub fn summary(now: &Scores, normal: &Scores) -> String {
-    SHOWN
-        .iter()
-        .map(|&(k, name)| {
-            let (v, d) = (get(now, k), get(now, k) - get(normal, k));
-            if d.abs() < 0.01 { format!("{name} {v:.1}") } else { format!("{name} {v:.1} ({d:+.1})") }
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+/// Each shown score, with its value and how far it is from normal.
+pub fn summary(now: &Scores, normal: &Scores) -> Vec<(&'static str, f32, f32)> {
+    SHOWN.iter().map(|&k| (k, get(now, k), get(now, k) - get(normal, k))).collect()
 }
 
 #[cfg(test)]
@@ -177,6 +190,13 @@ mod tests {
             }
         }
         c
+    }
+
+    fn no_spine_scores(normal: &Scores) -> Scores {
+        let mut s = normal.clone();
+        s.insert("nerves", 0.0);
+        s.insert("speed", get(normal, "speed") + 1.0);
+        s
     }
 
     fn base(bases: &[(&'static str, f64)], attr: &str) -> f64 {
@@ -210,6 +230,14 @@ mod tests {
         assert!((base(&bases, "minecraft:gravity") - 0.064).abs() < 1e-9);
         assert!((base(&bases, "minecraft:knockback_resistance") - 0.6).abs() < 1e-9);
         assert_eq!(base(&attribute_bases(&normal, &normal), "minecraft:gravity"), 0.08);
+
+        // A mob's attributes come as modifiers: a heart short is 4 health short, no spine is no moving.
+        let mob = modifiers(&no_heart, &normal);
+        assert!(mob.contains(&("minecraft:max_health", -4.0, "add_value")), "{mob:?}");
+        assert!(modifiers(&normal, &normal).is_empty());
+        let still = modifiers(&no_spine_scores(&normal), &normal);
+        assert_eq!(still.iter().filter(|m| m.0 == "minecraft:movement_speed").count(), 1, "{still:?}");
+        assert!(still.contains(&("minecraft:movement_speed", -1.0, "add_multiplied_total")));
 
         // No spine: no nerves, no moving.
         let no_spine = without("chestcavity:spine").scores(kind);

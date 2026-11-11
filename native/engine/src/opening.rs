@@ -1,7 +1,8 @@
 //! Showing a chest cavity. The Chest Opener only asks: the game opens a menu for a player between ticks, not
 //! while it handles the click. The server tick shows the screen and then charges what opening a chest costs.
-use crate::{ChestCavity, MobScreen, NO_SCREEN, lock, mob, trace};
-use chestcavity_shared::cavity::{get, mob_kind, mob_name};
+use crate::texts::{item_name_of_mob, msg};
+use crate::{ChestCavity, MobScreen, lock, mob, trace};
+use chestcavity_shared::cavity::{get, mob_kind};
 use horizon_client::mod_api::{Host, NativeServerPlayer};
 use std::sync::atomic::Ordering;
 
@@ -69,7 +70,7 @@ impl ChestCavity {
         for Ask { open, by } in asks {
             let easy = match &open {
                 Open::Own => self.open_own(host, by.uuid),
-                Open::Mob { entity, kind } => self.open_mob(host, by.uuid, *entity, kind),
+                Open::Mob { entity, kind } => self.open_mob(host, by.uuid, &by.dimension, *entity, kind),
             };
             trace::line(&*host, format!("open {open:?} for {} ({}): {easy:?}", by.uuid, by.entity));
             if easy != Some(false) {
@@ -91,26 +92,26 @@ impl ChestCavity {
     fn open_own(&self, host: &mut dyn Host, uuid: u128) -> Option<bool> {
         let easy = self.with(host, uuid, |body, host| body.open(host, uuid).then(|| get(&body.scores, "ease_of_access") > 0.0));
         if easy.is_none() {
-            Self::say(host, uuid, NO_SCREEN.into());
+            Self::say(host, uuid, msg("chestcavity.msg.no_screen"));
         }
         easy
     }
 
     /// The cavity of mob `entity` of type `kind`, as `open_own`.
-    fn open_mob(&self, host: &mut dyn Host, uuid: u128, entity: u32, kind: &str) -> Option<bool> {
+    fn open_mob(&self, host: &mut dyn Host, uuid: u128, dimension: &str, entity: u32, kind: &str) -> Option<bool> {
         let Some(body) = mob_kind(kind) else {
-            Self::say(host, uuid, format!("{} não tem cavidade torácica", mob_name(kind)));
+            Self::say(host, uuid, msg("chestcavity.msg.mob_none").arg(item_name_of_mob(kind)));
             return None;
         };
         let Some(cavity) = mob::load(host, entity, kind) else {
-            Self::say(host, uuid, format!("{} já não está aqui ou o jogo não guarda a cavidade dele", mob_name(kind)));
+            Self::say(host, uuid, msg("chestcavity.msg.mob_gone").arg(item_name_of_mob(kind)));
             return None;
         };
         let Some(window) = mob::open_menu(host, uuid, &cavity, kind) else {
-            Self::say(host, uuid, NO_SCREEN.into());
+            Self::say(host, uuid, msg("chestcavity.msg.no_screen"));
             return None;
         };
-        lock(&self.mob_screens).insert(uuid, MobScreen { window, entity, mob: kind.to_string() });
+        lock(&self.mob_screens).insert(uuid, MobScreen { window, entity, mob: kind.to_string(), dimension: dimension.to_string() });
         Some(get(&cavity.scores(body), "ease_of_access") > 0.0)
     }
 }

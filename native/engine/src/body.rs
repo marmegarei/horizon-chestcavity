@@ -3,6 +3,7 @@
 //! test double can stand in for the game.
 use crate::opening::Player;
 use crate::screen::{self, Click};
+use crate::texts::{Msg, item_name, msg};
 use crate::teleport;
 use chestcavity_shared::breath::Lungs;
 use chestcavity_shared::cavity::{Cavity, Scores, organ, player_kind};
@@ -15,7 +16,6 @@ use std::collections::HashMap;
 
 /// The key of the cavity in the player's persistent data (saved with the player).
 const KEY: &str = "chestcavity";
-pub const NO_HELD: &str = "Segura um órgão na mão principal para o meter";
 
 pub struct Body {
     pub cavity: Cavity,
@@ -112,16 +112,30 @@ impl Body {
 
     /// Opens the screen: the 27 slots as a chest. Click an organ to take it out, an organ of yours below to put it in.
     pub fn open(&mut self, host: &mut dyn Host, uuid: u128) -> bool {
-        self.menu = host.open_menu(uuid, 3, Text::literal("Cavidade torácica"), screen::items(&self.cavity));
+        self.menu = host.open_menu(uuid, 3, msg("chestcavity.title.own").text(), screen::items(&self.cavity));
         self.menu.is_some()
     }
 
-    pub fn summary(&self) -> String {
-        effects::summary(&self.scores, &self.normal)
+    /// The body's main scores, each with how far it is from normal, as one line.
+    pub fn summary(&self) -> Text {
+        let mut line = Text::empty();
+        for (i, (key, value, diff)) in effects::summary(&self.scores, &self.normal).into_iter().enumerate() {
+            if i > 0 {
+                line = line.append(Text::literal(", "));
+            }
+            let name = Text::translate_with_fallback(&format!("chestcavity.score.{key}.name"), key, &[]);
+            let entry = if diff.abs() < 0.01 {
+                Text::translate_with_fallback("chestcavity.summary.entry", "%s %s", &[name, Text::literal(format!("{value:.1}"))])
+            } else {
+                Text::translate_with_fallback("chestcavity.summary.entry_diff", "%s %s (%s)", &[name, Text::literal(format!("{value:.1}")), Text::literal(format!("{diff:+.1}"))])
+            };
+            line = line.append(entry);
+        }
+        line
     }
 
     /// What a click on the screen did to the cavity: save it and tell the player, if there is anything to tell.
-    fn settle(&mut self, host: &mut dyn Host, uuid: u128, click: Click) -> Option<String> {
+    fn settle(&mut self, host: &mut dyn Host, uuid: u128, click: Click) -> Option<Msg> {
         if click.changed {
             self.changed(host, uuid);
         }
@@ -129,27 +143,28 @@ impl Body {
     }
 
     /// A click on menu slot `slot`; what to tell the player, if anything.
-    pub fn click(&mut self, host: &mut dyn Host, uuid: u128, slot: i32) -> Option<String> {
+    pub fn click(&mut self, host: &mut dyn Host, uuid: u128, slot: i32) -> Option<Msg> {
         let click = screen::click(host, uuid, &mut self.cavity, slot);
         self.settle(host, uuid, click)
     }
 
     /// Takes the organ in cavity slot `i` out into the player's inventory.
-    pub fn take_out(&mut self, host: &mut dyn Host, uuid: u128, i: usize) -> Option<String> {
+    pub fn take_out(&mut self, host: &mut dyn Host, uuid: u128, i: usize) -> Option<Msg> {
         let click = screen::take_out(host, uuid, &mut self.cavity, i);
         self.settle(host, uuid, click)
     }
 
     /// Puts `held`, an organ of the player's, in the first empty slot; `remove` takes it from where it is.
-    pub fn put_in(&mut self, host: &mut dyn Host, uuid: u128, held: ItemStack, remove: impl FnOnce(&mut dyn Host, &ItemStack) -> bool) -> Option<String> {
+    pub fn put_in(&mut self, host: &mut dyn Host, uuid: u128, held: ItemStack, remove: impl FnOnce(&mut dyn Host, &ItemStack) -> bool) -> Option<Msg> {
         let click = screen::put_in(host, &mut self.cavity, held, remove);
         self.settle(host, uuid, click)
     }
     /// Puts the organ in the player's main hand in; what to tell them.
-    pub fn put_held(&mut self, host: &mut dyn Host, uuid: u128) -> String {
-        let Some(held) = host.held_stack(uuid) else { return NO_HELD.into() };
+    pub fn put_held(&mut self, host: &mut dyn Host, uuid: u128) -> Msg {
+        let Some(held) = host.held_stack(uuid) else { return msg("chestcavity.msg.no_held") };
+        let name = organ(&held.item).map_or_else(|| Text::literal(held.item.to_string()), |o| item_name(o.id, o.name));
         self.put_in(host, uuid, held.clone(), |host, h| host.take_items(&h.item, h.count) == h.count)
-            .unwrap_or_else(|| format!("Meteste {} na cavidade", organ(&held.item).map_or(held.item.as_ref(), |o| o.name)))
+            .unwrap_or_else(|| msg("chestcavity.msg.put").arg(name))
     }
 
     /// Once a second: what the organs do over time.
