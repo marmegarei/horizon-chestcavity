@@ -1,0 +1,26 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty peaceful"
+command "gamemode survival"
+command "cc reset"
+note "Usa as teclas V e R com as associações padrão do mod. O corpo normal permite testar os pedidos de ambos os grupos sem disparar projéteis nem consumir órgãos."
+command "cc ability creepy"
+command "cc ability dragon_bombs"
+command "cc ability forceful_spit"
+command "cc ability ghastly"
+command "cc ability pyromancy"
+command "cc ability grazing"
+command "cc ability iron_repair"
+command "cc ability silk"
+wait 8
+key v down
+wait 2
+key v up
+wait 8
+key r down
+wait 2
+key r up
+wait 8

@@ -1,0 +1,9 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty peaceful"
+mark
+command "cc selftest true"
+wait-chat " 0 FAIL" 300

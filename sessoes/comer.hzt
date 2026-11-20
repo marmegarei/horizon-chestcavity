@@ -1,0 +1,39 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty peaceful"
+command "gamerule spawn_mobs false"
+command "gamemode survival"
+command "cc reset"
+command "clear @s"
+command "effect clear @s"
+command "gamerule natural_health_regeneration false"
+note "O Horizon não reduz os pontos de comida por exaustão em pacífico. O défice é preparado em fácil, com Fome e sem spawns naturais. As duas refeições correm em pacífico."
+command "difficulty easy"
+command "effect give @s minecraft:hunger 20 255 true"
+wait-until state -- player.food <= 10 30
+command "effect clear @s minecraft:hunger"
+command "difficulty peaceful"
+
+note "O trace dá uma linha ate <item> no fim de comer e outra ate: food <antes> -> <depois> quando o estômago digere."
+command "give @s minecraft:bread"
+wait-until inventory -- counts.minecraft:bread == 1 10
+select minecraft:bread
+use-item --hold 2
+wait-until inventory -- counts.minecraft:bread !exists 10
+wait 8
+# O estômago humano está no índice 22. /cc take usa numeração a partir de 1.
+command "cc take 23"
+wait-until inventory -- counts.chestcavity:stomach == 1 10
+command "give @s minecraft:bread"
+wait-until inventory -- counts.minecraft:bread == 1 10
+select minecraft:bread
+use-item --hold 2
+wait-until inventory -- counts.minecraft:bread !exists 10
+wait 8
+select chestcavity:stomach
+command "cc put"
+wait-until inventory -- counts.chestcavity:stomach !exists 10
+command "gamerule natural_health_regeneration true"

@@ -1,0 +1,83 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty easy"
+command "gamerule spawn_mobs false"
+command "gamerule immediate_respawn false"
+command "gamerule keep_inventory false"
+command "gamemode survival"
+command "cc reset"
+command "clear @s"
+command "fill -3 100 -3 3 100 5 minecraft:stone"
+command "tp @s 0.5 101 0.5 0 0"
+wait-until state -- player.block_pos.1 == 101 10
+command "fill -1 104 1 1 104 4 minecraft:stone"
+command "execute positioned 0.5 101 0.5 run kill @e[type=minecraft:item,distance=..5]"
+command "give @s chestcavity:chest_opener"
+wait-until inventory -- counts.chestcavity:chest_opener == 1 10
+select chestcavity:chest_opener
+note "Com a config por omissão, os UUIDs fixos dos zombies tornam os dois corações órgãos com dono pelo RNG de mob.rs."
+command 'summon minecraft:zombie 0.5 101 2.5 {Health:10f,NoAI:1b,Tags:["cc_hzt_zombie"],UUID:[I;0,0,0,62101]}'
+look-at 0.5 102.3 2.5
+wait-until looking-at -- entity.type == minecraft:zombie 10
+mouse right click
+wait-until screen -- screen == container 10
+wait-until screen -- slots.40.item == chestcavity:rotten_heart 10
+click-slot 304
+wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
+close
+wait-until state -- screen == playing 10
+select chestcavity:rotten_heart
+command "cc put"
+wait-until inventory -- counts.chestcavity:rotten_heart !exists 10
+command "cc open"
+wait-until screen -- slots.42.item == chestcavity:rotten_heart 10
+close
+wait-until state -- screen == playing 10
+command "kill @s"
+wait-until state -- screen == dead 10
+wait-until entities 5 minecraft:item -- entities ~ chestcavity:rotten_heart 10
+wait 24
+respawn
+wait-until state -- screen == playing 15
+expect inventory -- counts.chestcavity:rotten_heart !exists
+
+command "gamerule keep_inventory true"
+command "tp @s 0.5 101 0.5 0 0"
+wait-until state -- player.block_pos.1 == 101 10
+command "kill @e[tag=cc_hzt_zombie,type=minecraft:zombie]"
+wait 24
+command "execute positioned 0.5 101 0.5 run kill @e[type=minecraft:item,distance=..5]"
+command "clear @s"
+command "give @s chestcavity:chest_opener"
+wait-until inventory -- counts.chestcavity:chest_opener == 1 10
+select chestcavity:chest_opener
+command 'summon minecraft:zombie 0.5 101 2.5 {Health:10f,NoAI:1b,Tags:["cc_hzt_zombie"],UUID:[I;0,0,0,62102]}'
+look-at 0.5 102.3 2.5
+wait-until looking-at -- entity.type == minecraft:zombie 10
+mouse right click
+wait-until screen -- screen == container 10
+wait-until screen -- slots.40.item == chestcavity:rotten_heart 10
+click-slot 304
+wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
+close
+wait-until state -- screen == playing 10
+select chestcavity:rotten_heart
+command "cc put"
+wait-until inventory -- counts.chestcavity:rotten_heart !exists 10
+command "cc open"
+wait-until screen -- slots.42.item == chestcavity:rotten_heart 10
+close
+wait-until state -- screen == playing 10
+command "kill @s"
+wait-until state -- screen == dead 10
+wait 24
+expect entities 5 minecraft:item -- entities.0 !exists
+respawn
+wait-until state -- screen == playing 15
+wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
+expect inventory -- counts.chestcavity:chest_opener == 1
+command "gamerule keep_inventory false"
+command "difficulty peaceful"

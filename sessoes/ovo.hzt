@@ -1,0 +1,25 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty peaceful"
+command "gamemode survival"
+command "clear @s"
+command "fill -3 100 -3 3 100 5 minecraft:stone"
+command "tp @s 0.5 101 0.5 0 0"
+wait-until state -- player.block_pos.1 == 101 10
+command "give @s chestcavity:chest_opener"
+wait-until inventory -- counts.chestcavity:chest_opener == 1 10
+select chestcavity:chest_opener
+note "A primeira expansão exige uma cavidade de 27 slots. O cc reset preserva o tamanho atual."
+mark
+command "cc list"
+wait-chat "27. " 10
+command "setblock 0 101 2 minecraft:dragon_egg"
+wait-until block 0 101 2 -- block == minecraft:dragon_egg 10
+interact 0 101 2
+wait-until block 0 101 2 -- block == minecraft:air 10
+mark
+command "cc list"
+wait-chat "36. " 10

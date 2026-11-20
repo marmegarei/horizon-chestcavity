@@ -1,0 +1,37 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty easy"
+command "gamerule spawn_mobs false"
+command "gamerule mob_griefing false"
+command "gamerule mob_drops true"
+command "gamemode survival"
+command "clear @s"
+command "fill -3 100 -3 3 100 5 minecraft:stone"
+command "tp @s 0.5 101 0.5 0 0"
+wait-until state -- player.block_pos.1 == 101 10
+# O codec da 26.3 recebe diretamente o mapa encantamento -> nível.
+command 'give @s minecraft:diamond_sword[enchantments={"minecraft:looting":3}]'
+wait-until inventory -- counts.minecraft:diamond_sword == 1 10
+select minecraft:diamond_sword
+expect inventory -- held.components ~ minecraft:looting
+note "O Wither tem saque de órgãos de boss. Confirmar na primeira execução o ataque com Health:1f, NoAI:1b e Invul:0 nesta build."
+command 'summon minecraft:wither 0.5 101 2.5 {Health:1f,NoAI:1b,Invul:0,Tags:["cc_hzt_wither"]}'
+look-at 0.5 102.6 2.5
+wait-until looking-at -- entity.type == minecraft:wither 10
+attack
+wait-until entities 5 minecraft:wither -- entities.0 !exists 30
+
+command 'give @s chestcavity:diamond_cleaver[enchantments={"minecraft:looting":3}]'
+wait-until inventory -- counts.chestcavity:diamond_cleaver == 1 10
+select chestcavity:diamond_cleaver
+expect inventory -- held.components ~ minecraft:looting
+command 'summon minecraft:wither 0.5 101 2.5 {Health:1f,NoAI:1b,Invul:0,Tags:["cc_hzt_wither"]}'
+look-at 0.5 102.6 2.5
+wait-until looking-at -- entity.type == minecraft:wither 10
+attack
+wait-until entities 5 minecraft:wither -- entities.0 !exists 30
+command "difficulty peaceful"
+command "gamerule mob_griefing true"

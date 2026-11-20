@@ -1,0 +1,52 @@
+options-set pauseOnLostFocus false
+options-set chatVisibility 0
+wait-ready 60
+command "gamerule advance_time false"
+command "time set day"
+command "difficulty easy"
+command "gamerule spawn_mobs false"
+command "gamemode survival"
+command "clear @s"
+command "fill -3 100 -3 3 100 5 minecraft:stone"
+command "tp @s 0.5 101 0.5 0 0"
+wait-until state -- player.block_pos.1 == 101 10
+command "fill -1 104 1 1 104 4 minecraft:stone"
+command "give @s chestcavity:chest_opener"
+wait-until inventory -- counts.chestcavity:chest_opener == 1 10
+select chestcavity:chest_opener
+# O coração é o slot de cavidade 4, portanto o slot 304 no horizon-ctl.
+command 'summon minecraft:zombie 0.5 101 2.5 {Health:10f,NoAI:1b,Tags:["cc_hzt_zombie"]}'
+look-at 0.5 102.3 2.5
+wait-until looking-at -- entity.type == minecraft:zombie 10
+mouse right click
+wait-until screen -- screen == container 10
+wait-until screen -- slots.40.item == chestcavity:rotten_heart 10
+click-slot 304
+wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
+close
+wait-until state -- screen == playing 10
+note "O zombie conserva 0,5 de saúde base sem coração. A vaca não tem essa reserva e serve para verificar a hemorragia."
+command "kill @e[tag=cc_hzt_zombie,type=minecraft:zombie]"
+command 'summon minecraft:cow 0.5 101 2.5 {Health:10f,NoAI:1b,Tags:["cc_hzt_cow"]}'
+look-at 0.5 102.0 2.5
+wait-until looking-at -- entity.type == minecraft:cow 10
+mouse right click
+wait-until screen -- screen == container 10
+wait-until screen -- slots.40.item == chestcavity:animal_heart 10
+click-slot 304
+wait-until inventory -- counts.chestcavity:animal_heart == 1 10
+close
+wait-until state -- screen == playing 10
+# O motor processa os mobs alterados uma vez por segundo.
+wait 40
+command 'summon minecraft:creeper 2.5 101 2.5 {Health:10f,NoAI:1b,Tags:["cc_hzt_creeper"]}'
+look-at 2.5 102.2 2.5
+wait-until looking-at -- entity.type == minecraft:creeper 10
+mouse right click
+wait-until screen -- screen == container 10
+wait-until screen -- slots.49.item == minecraft:oak_log 10
+close
+wait-until state -- screen == playing 10
+command "kill @e[tag=cc_hzt_cow,type=minecraft:cow]"
+command "kill @e[tag=cc_hzt_creeper,type=minecraft:creeper]"
+command "difficulty peaceful"
