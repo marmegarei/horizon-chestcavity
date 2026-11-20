@@ -39,6 +39,13 @@ impl ChestCavity {
                     body.scale = scale;
                     body.activate(host, &p, ability, &mut lock(&self.rng))
                 });
+                let status = match &said {
+                    Ok(()) => "ok",
+                    Err(why) if why.key() == "chestcavity.msg.resting" => "resting",
+                    Err(why) if why.key() == "chestcavity.msg.no_ability" => "none",
+                    Err(_) => "failed",
+                };
+                crate::trace::line(&*host, format!("ability {}: {status}", ability.name));
                 if let Err(why) = said {
                     if ability.name == which {
                         Self::say(host, uuid, why);

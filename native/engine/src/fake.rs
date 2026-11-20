@@ -38,6 +38,8 @@ pub struct Fake {
     pub set_blocks: Vec<(String, [i32; 3], u32)>,
     /// The rows of the last menu the engine opened.
     pub menu_rows: Option<u8>,
+    /// Whether `effects` lists those `add_effect` gave too (the selftest reads them back).
+    pub effects_listed: bool,
 }
 
 impl Fake {
@@ -65,6 +67,7 @@ impl Fake {
             removed: Vec::new(),
             set_blocks: Vec::new(),
             menu_rows: None,
+            effects_listed: false,
         }
     }
 
@@ -86,6 +89,11 @@ impl Host for Fake {
     fn set_player_persistent_data(&mut self, _: u128, data: Tag) -> bool {
         self.data = Some(data);
         true
+    }
+    /// (base, total) as the game reports it: the last base set, clamped as the game clamps it, with no modifiers.
+    fn attribute(&mut self, _: u128, attribute: &str) -> Option<(f64, f64)> {
+        let b = chestcavity_shared::selftest::clamp(attribute, self.bases.iter().rev().find(|(a, _)| a == attribute)?.1);
+        Some((b, b))
     }
     fn set_attribute_base(&mut self, _: u128, attribute: &str, base: f64) -> bool {
         self.bases.push((attribute.to_string(), base));
@@ -205,7 +213,8 @@ impl Host for Fake {
         None
     }
     fn effects(&self, _: u128) -> Option<Vec<NativeEffect>> {
-        Some(self.current.clone())
+        let given = self.effects.iter().filter(|_| self.effects_listed).filter(|e| !self.removed.contains(&e.id.to_string()));
+        Some(self.current.iter().chain(given).cloned().collect())
     }
     fn set_effects(&mut self, _: u128, effects: &[NativeEffect]) -> bool {
         self.current = effects.to_vec();

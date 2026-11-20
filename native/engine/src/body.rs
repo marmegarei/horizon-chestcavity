@@ -17,12 +17,12 @@ use horizon_client::mod_api::{Host, ItemStack, NativeEffect, Tag, Text};
 use std::collections::HashMap;
 
 /// The key of the cavity in the player's persistent data (saved with the player).
-const KEY: &str = "chestcavity";
+pub(crate) const KEY: &str = "chestcavity";
 /// The first line of a saved cavity since organs have owners. A cavity saved without it (before version 0.8) has none, and
 /// every organ in it is its body's.
 const OWNERS: &str = "owners";
 /// The effect a body shows while it rejects an organ: its time is the time to the next rejection.
-const REJECTION: &str = "chestcavity:organ_rejection";
+pub(crate) const REJECTION: &str = "chestcavity:organ_rejection";
 
 pub struct Body {
     /// Whose body it is (their uuid): what organs fit it.
@@ -68,16 +68,21 @@ impl Body {
             Some(Tag::String(s)) => Some(s.to_string_lossy()),
             _ => None,
         });
-        // A body's own organs are born in it.
-        let cavity = match saved {
-            Some(t) if t.starts_with(OWNERS) => Cavity::from_text(&t),
-            Some(t) => Cavity::from_text(&t).born(uuid, || false),
-            None => Cavity::of(kind).born(uuid, || false),
+        // A body's own organs are born in it. A selftest that never ended left the body from before it.
+        let left_over = crate::selftest::left_over(host, uuid);
+        let restored = left_over.is_some();
+        let cavity = match (left_over, saved) {
+            (Some(c), _) => c,
+            (None, Some(t)) if t.starts_with(OWNERS) => Cavity::from_text(&t),
+            (None, Some(t)) => Cavity::from_text(&t).born(uuid, || false),
+            (None, None) => Cavity::of(kind).born(uuid, || false),
         };
         let mut body = Body::of(cavity);
         body.uuid = uuid;
         body.rescore();
-        if body.scores != body.normal {
+        if restored {
+            body.changed(host, uuid);
+        } else if body.scores != body.normal {
             body.apply(host, uuid);
         }
         body
@@ -249,6 +254,12 @@ impl Body {
             .unwrap_or_else(|| msg("chestcavity.msg.put").arg(name))
     }
 
+    /// The effect that shows the body rejects an organ, lasting until the next rejection (`every` ticks).
+    pub fn show_rejection(&self, host: &mut dyn Host, uuid: u128, every: f32) -> bool {
+        let effect = NativeEffect { id: REJECTION.into(), amplifier: 0, duration: every as i32, ambient: false, particles: false };
+        host.add_effect(uuid, &effect)
+    }
+
     /// Once a second: what the organs do over time.
     pub fn beat(&mut self, host: &mut dyn Host, who: &Player, env: &Env, rng: &mut Rng, cfg: &Config) {
         let seconds = self.ticks / 20;
@@ -256,8 +267,8 @@ impl Body {
         if cfg.organ_rejection && self.incompat > 0 {
             let every = cfg.rejection_rate / self.incompat as f32;
             if self.rejection == 0 {
-                let effect = NativeEffect { id: REJECTION.into(), amplifier: 0, duration: every as i32, ambient: false, particles: false };
-                host.add_effect(who.uuid, &effect);
+                self.show_rejection(host, who.uuid, every);
+                crate::trace::line(&*host, format!("rejection: {} organs", self.incompat));
             }
             self.rejection += 20;
             if self.rejection as f32 >= every {

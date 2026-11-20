@@ -33,6 +33,7 @@ impl Body {
             let eaten = food::eat(&self.scores, meal, (now.0 - level).max(0), (now.1 - saturation).max(0.0));
             out.0 = (level + eaten.food).min(20);
             out.1 = (saturation + eaten.saturation).min(out.0 as f32);
+            crate::trace::line(&*host, format!("ate: food {level} -> {} (the game gave {})", out.0, now.0));
             for (id, ticks) in [("minecraft:nausea", eaten.nausea), ("minecraft:hunger", eaten.hunger)] {
                 if ticks > 0 {
                     host.add_effect(uuid, &NativeEffect { id: id.into(), amplifier: 0, duration: ticks, ambient: false, particles: true });

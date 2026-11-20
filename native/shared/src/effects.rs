@@ -25,6 +25,13 @@ pub fn rate(score: &str) -> Option<f64> {
     ATTRIBUTES.iter().find(|a| a.0 == score).map(|a| a.4)
 }
 
+/// The scores that move an attribute (the table above), each once: what the selftest gives a body more of.
+pub fn attribute_scores() -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = ATTRIBUTES.iter().map(|a| a.0).collect();
+    out.dedup();
+    out
+}
+
 /// `LIGHTWIEGHT_FACTOR`: how much one point of lightness takes off gravity (and one of heaviness adds).
 const LIGHTWEIGHT: f64 = 0.25;
 

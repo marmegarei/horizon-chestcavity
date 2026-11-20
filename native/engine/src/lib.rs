@@ -19,6 +19,7 @@ mod nutrition;
 mod opening;
 mod purge;
 mod screen;
+mod selftest;
 mod teleport;
 #[cfg(test)]
 mod tests;
@@ -83,6 +84,8 @@ struct ChestCavity {
     /// The mobs whose cavity has been changed, by entity id (see `mobbody`).
     mobs: Mutex<HashMap<u32, MobBody>>,
     rng: Mutex<Rng>,
+    /// The selftests running, by player (see `selftest`).
+    selftests: Mutex<HashMap<u128, selftest::Run>>,
 }
 
 struct MobScreen {
@@ -114,6 +117,7 @@ impl ChestCavity {
             mob_screens: Mutex::new(HashMap::new()),
             mobs: Mutex::new(HashMap::new()),
             rng: Mutex::new(Rng(seed | 1)),
+            selftests: Mutex::new(HashMap::new()),
         }
     }
 
@@ -225,7 +229,7 @@ impl Hooks for ChestCavity {
         for usage in ["cc", "cc show", "cc list", "cc take <slot:integer>", "cc put", "cc ability <name:word>"] {
             event.commands.push(NativeCommand::new(usage));
         }
-        for usage in ["cc open", "cc reset"] {
+        for usage in ["cc open", "cc reset", "cc selftest", "cc selftest <force:boolean>"] {
             event.commands.push(NativeCommand::op(usage, 2));
         }
     }
@@ -238,6 +242,14 @@ impl Hooks for ChestCavity {
         }
         let uuid = event.player.uuid;
         let (sub, arg) = (words.next(), words.next());
+        if lock(&self.selftests).contains_key(&uuid) {
+            Self::say(host, uuid, msg("chestcavity.selftest.busy").text());
+            return Flow::Cancel;
+        }
+        if sub == Some("selftest") {
+            self.selftest_command(host, uuid, arg == Some("true"));
+            return Flow::Cancel;
+        }
         if sub == Some("open") {
             self.ask_own(Player::from(event.player));
             return Flow::Cancel;
@@ -384,6 +396,9 @@ impl Hooks for ChestCavity {
             lock(&self.entities).insert(entity, p.uuid);
         }
         lock(&self.players).insert(p.uuid, (Player::from(&p), p.game_mode));
+        if self.selftest_tick(host, p.uuid) {
+            return;
+        }
         self.with(host, p.uuid, |body, host| {
             body.ticks += 1;
             if p.game_mode == 3 {
@@ -404,6 +419,7 @@ impl Hooks for ChestCavity {
     fn living_entity_use_item_finish(&self, host: &mut dyn Host, event: &mut LivingEntityUseItemFinishEvent<'_>) {
         let (None, Some(p)) = (event.entity, host.acting_player()) else { return };
         let meal = Meal::of(&event.stack.item);
+        trace::line(&*host, format!("ate {}", event.stack.item));
         self.with(host, p.uuid, |body, _| body.ate(meal));
     }
 
@@ -438,6 +454,10 @@ impl Hooks for ChestCavity {
     /// A new body, as after a death (or the one they had, with the settings that keep the chest cavity).
     fn player_respawned(&self, host: &mut dyn Host, event: &mut PlayerRespawnedEvent<'_>) {
         let (uuid, cfg) = (event.player, self.cfg());
+        let run = lock(&self.selftests).remove(&uuid);
+        if let Some(run) = run {
+            self.with(host, uuid, |body, host| selftest::abort(host, uuid, body, run));
+        }
         self.with(host, uuid, |body, host| body.respawn(host, uuid, cfg.keep_chest_cavity, cfg.keep_grown_cavity));
     }
 
@@ -447,6 +467,8 @@ impl Hooks for ChestCavity {
         lock(&self.players).remove(&event.player);
         lock(&self.mob_screens).remove(&event.player);
         lock(&self.opens).remove(&event.player);
+        // The body saved before the test is put back at the next login.
+        lock(&self.selftests).remove(&event.player);
     }
 
     /// What dies drops: the organs a dead body gives up (a player's with what they carried) and those of the mobs killed.
@@ -455,7 +477,11 @@ impl Hooks for ChestCavity {
         let (Some((entity, kind)), None, false) = (ctx.entity, ctx.block, ctx.used) else { return };
         // A dying player's inventory is a call of its own, with no loot table.
         if kind == "minecraft:player" {
+            // A body in the middle of a selftest is not its own: nothing of it drops (the respawn puts the real one back).
             if let (Some(uuid), true) = (ctx.player, ctx.table.is_empty()) {
+                if lock(&self.selftests).contains_key(&uuid) {
+                    return;
+                }
                 self.player_dropped(host, uuid, event.drops);
             }
             return;

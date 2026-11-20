@@ -23,7 +23,7 @@ const NO_FUSE: i16 = i16::MAX;
 
 pub struct MobBody {
     pub dimension: String,
-    mob: String,
+    pub(crate) mob: String,
     /// Whether its fuse has been made endless (a creeper without its appendix can't explode).
     fuse_cut: bool,
     scores: Scores,
@@ -129,7 +129,17 @@ impl ChestCavity {
                 lock(&self.mobs).remove(&id);
                 continue;
             };
-            let Some((acts, dimension)) = lock(&self.mobs).get_mut(&id).map(|b| (b.beat(seconds), b.dimension.clone())) else { continue };
+            let Some((acts, dimension, mob)) = lock(&self.mobs).get_mut(&id).map(|b| (b.beat(seconds), b.dimension.clone(), b.mob.clone())) else { continue };
+            for act in &acts {
+                let state = match act {
+                    Act::Hurt { kind: "minecraft:drown", .. } => "drowning",
+                    Act::Hurt { .. } => "bleeding",
+                    Act::Modifiers { add, .. } if add.iter().any(|m| m.0 == "minecraft:movement_speed" && m.1 <= -1.0) => "paralysed",
+                    Act::Modifiers { .. } => "changed",
+                    _ => continue,
+                };
+                crate::trace::line(&*host, format!("mob {id} {mob}: {state}"));
+            }
             let uuid = entity.uuid(host).map(crate::combat::uuid_text);
             for act in acts {
                 match (act, &uuid) {

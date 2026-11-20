@@ -51,6 +51,10 @@ pub const ALL: &[(&str, &str)] = &[
     ("chestcavity.msg.hungry_silk", "You are too hungry to spin silk"),
     ("chestcavity.msg.not_shot", "%s cannot be fired"),
     ("chestcavity.msg.need_more", "You need more %s for that"),
+    ("chestcavity.selftest.started", "Selftest started: your chest cavity comes back when it ends"),
+    ("chestcavity.selftest.busy", "A selftest is running: wait for it to end"),
+    ("chestcavity.selftest.refused", "Your chest cavity is not the normal one: /cc reset first, or /cc selftest true"),
+    ("chestcavity.selftest.result", "Selftest: %s PASS, %s FAIL, %s INFO (details in chestcavity-trace.log)"),
 ];
 
 fn english(key: &str) -> &'static str {
@@ -70,6 +74,10 @@ pub fn msg(key: &'static str) -> Msg {
 }
 
 impl Msg {
+    pub fn key(&self) -> &'static str {
+        self.key
+    }
+
     pub fn arg(mut self, text: impl Into<Text>) -> Msg {
         self.args.push(text.into());
         self

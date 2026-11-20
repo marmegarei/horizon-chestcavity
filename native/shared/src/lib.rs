@@ -18,4 +18,5 @@ pub mod layout;
 pub mod open;
 pub mod potions;
 pub mod organs;
+pub mod selftest;
 pub mod teleport;
