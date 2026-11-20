@@ -7,7 +7,7 @@ use crate::layout;
 use crate::organs::ORGANS;
 
 /// How far the game's value may be from the expected one and still pass.
-pub const TOLERANCE: f64 = 0.01;
+pub const TOLERANCE: f64 = 1e-4;
 
 /// The range the game clamps each attribute the organs touch to (vanilla's `RangedAttribute`s, as the Horizon fdc87ae
 /// exports them in `attributes.json`): a base outside it is reported clamped.
@@ -123,6 +123,9 @@ mod tests {
         assert!(close(base(find("without chestcavity:heart"), "minecraft:max_health"), 16.0));
         // Without a spine the body cannot move: its speed is set to 0 after the muscles' share.
         assert_eq!(base(find("without chestcavity:spine"), "minecraft:movement_speed"), 0.0);
+        // One muscle less is a small change, and it still must not pass for the unchanged base.
+        let muscle = base(find("without chestcavity:muscle"), "minecraft:movement_speed");
+        assert!(!close(muscle, 0.1), "{muscle}");
         assert_eq!(clamp("minecraft:knockback_resistance", 3.0), 1.0);
         assert_eq!(clamp("minecraft:max_health", -4.0), 1.0);
     }

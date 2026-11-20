@@ -54,6 +54,10 @@ impl ChestCavity {
     /// The opener used in the air or on a block: your own chest cavity. A click on a mob raises the entity's hook
     /// and then the item's own: that second use must not swap the mob's screen for yours.
     pub(crate) fn ask_own(&self, by: Player) {
+        // A selftest body is not the player's own: no screen on it.
+        if lock(&self.selftests).contains_key(&by.uuid) {
+            return;
+        }
         let ticks = self.ticks.load(Ordering::Relaxed);
         if lock(&self.mob_clicks).get(&by.uuid).is_some_and(|&at| ticks <= at + SAME_CLICK) {
             return;

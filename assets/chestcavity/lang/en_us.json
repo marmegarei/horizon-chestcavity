@@ -499,6 +499,8 @@
   "chestcavity.selftest.busy": "A selftest is running: wait for it to end",
   "chestcavity.selftest.refused": "Your chest cavity is not the normal one: /cc reset first, or /cc selftest true",
   "chestcavity.selftest.result": "Selftest: %s PASS, %s FAIL, %s INFO (details in chestcavity-trace.log)",
+  "chestcavity.msg.op_only": "Only operators can use that",
+  "chestcavity.selftest.unsaved": "Could not save your chest cavity first: the selftest did not start",
   "chestcavity.fmt.value": "%1$s: %2$s",
   "chestcavity.fmt.said": "%1$s %2$s: %3$s",
   "chestcavity.fmt.ability": "%1$s: %2$s%3$s",

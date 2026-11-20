@@ -82,6 +82,7 @@ impl Body {
         body.rescore();
         if restored {
             body.changed(host, uuid);
+            crate::selftest::forget(host, uuid);
         } else if body.scores != body.normal {
             body.apply(host, uuid);
         }

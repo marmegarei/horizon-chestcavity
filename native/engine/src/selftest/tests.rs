@@ -32,7 +32,7 @@ fn body_of(cc: &ChestCavity, game: &mut Fake) -> Cavity {
 #[test]
 fn the_selftest_runs_every_body_with_no_fail_and_gives_the_body_back() {
     let (cc, mut game) = world();
-    cc.selftest_command(&mut game, ME, false);
+    cc.selftest_command(&mut game, ME, false, 20.0);
     assert_eq!(game.said.last().map(String::as_str), Some("Selftest started: your chest cavity comes back when it ends"));
     run_out(&cc, &mut game);
 
@@ -42,6 +42,7 @@ fn the_selftest_runs_every_body_with_no_fail_and_gives_the_body_back() {
     assert_eq!(body_of(&cc, &mut game), normal());
     assert!(saved(&game, ME, SNAPSHOT).is_none(), "nothing left to put back");
     assert!(game.removed.iter().any(|r| r == REJECTION), "the rejection effect went with the test");
+    assert_eq!(game.statuses.last().map(|s| s.0), Some(Some(20.0)), "the health the heart test took is back");
 }
 
 #[test]
@@ -53,11 +54,11 @@ fn an_altered_body_is_refused_unless_forced_and_comes_back_as_it_was() {
         body.cavity = altered.clone();
         body.changed(host, ME);
     });
-    cc.selftest_command(&mut game, ME, false);
+    cc.selftest_command(&mut game, ME, false, 20.0);
     assert!(game.said.last().unwrap().contains("not the normal one"));
     assert!(!crate::lock(&cc.selftests).contains_key(&ME));
 
-    cc.selftest_command(&mut game, ME, true);
+    cc.selftest_command(&mut game, ME, true, 20.0);
     run_out(&cc, &mut game);
     assert!(game.said.last().unwrap().contains(" 0 FAIL"));
     assert_eq!(body_of(&cc, &mut game), altered);
@@ -72,7 +73,7 @@ fn a_selftest_cut_short_by_a_logout_puts_the_body_back_at_the_next_login() {
         body.cavity = altered.clone();
         body.changed(host, ME);
     });
-    cc.selftest_command(&mut game, ME, true);
+    cc.selftest_command(&mut game, ME, true, 20.0);
     for _ in 0..20 {
         assert!(cc.selftest_tick(&mut game, ME));
     }
@@ -90,7 +91,7 @@ fn a_selftest_cut_short_by_a_logout_puts_the_body_back_at_the_next_login() {
 #[test]
 fn a_death_halfway_ends_the_test_and_puts_the_body_back() {
     let (cc, mut game) = world();
-    cc.selftest_command(&mut game, ME, false);
+    cc.selftest_command(&mut game, ME, false, 20.0);
     for _ in 0..10 {
         cc.selftest_tick(&mut game, ME);
     }
@@ -99,4 +100,17 @@ fn a_death_halfway_ends_the_test_and_puts_the_body_back() {
     assert_eq!(body_of(&cc, &mut game), normal());
     assert!(saved(&game, ME, SNAPSHOT).is_none());
     assert!(!cc.selftest_tick(&mut game, ME), "nothing runs any more");
+}
+
+#[test]
+fn the_players_own_screen_neither_opens_nor_moves_organs_while_a_selftest_runs() {
+    let (cc, mut game) = world();
+    assert!(cc.with(&mut game, ME, |body, host| body.open(host, ME)), "a screen open before the test");
+    cc.selftest_command(&mut game, ME, false, 20.0);
+    cc.selftest_tick(&mut game, ME);
+    // A click on the heart's slot would hand out a test organ as a real item.
+    cc.clicked(&mut game, ME, 5, 4, 0);
+    assert!(game.inventory.iter().all(Option::is_none), "nothing came out");
+    cc.ask_own(crate::opening::Player { uuid: ME, dimension: "minecraft:overworld".into(), entity: 1, health: 20.0, position: [0.0; 3], yaw: 0.0, pitch: 0.0 });
+    assert!(crate::lock(&cc.opens).is_empty(), "no screen is asked for");
 }

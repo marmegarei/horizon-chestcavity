@@ -168,7 +168,7 @@ impl ChestCavity {
                 self.track_mob(entity, &mob, &dimension, &cavity);
             }
             line
-        } else if lock(&self.bodies).get(&uuid).is_some_and(|b| b.menu == Some(window)) {
+        } else if lock(&self.bodies).get(&uuid).is_some_and(|b| b.menu == Some(window)) && !lock(&self.selftests).contains_key(&uuid) {
             self.with(host, uuid, |body, host| body.click(host, uuid, slot))
         } else {
             return;
@@ -242,12 +242,12 @@ impl Hooks for ChestCavity {
         }
         let uuid = event.player.uuid;
         let (sub, arg) = (words.next(), words.next());
-        if lock(&self.selftests).contains_key(&uuid) {
-            Self::say(host, uuid, msg("chestcavity.selftest.busy").text());
+        // The game checks only the lowest permission of a command's root (`/cc` is everyone's): the op ones check here.
+        if matches!(sub, Some("open" | "reset" | "selftest")) && event.player.permission < 2 {
+            Self::say(host, uuid, msg("chestcavity.msg.op_only").text());
             return Flow::Cancel;
         }
-        if sub == Some("selftest") {
-            self.selftest_command(host, uuid, arg == Some("true"));
+        if self.selftest_perform(host, event.player, sub, arg) {
             return Flow::Cancel;
         }
         if sub == Some("open") {

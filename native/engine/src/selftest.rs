@@ -13,7 +13,7 @@ use chestcavity_shared::cavity::{Cavity, GROWN, SLOTS, Slot, player_kind};
 use chestcavity_shared::config::Config;
 use chestcavity_shared::layout;
 use chestcavity_shared::selftest::{Case, cases, close, expected};
-use horizon_client::mod_api::{Host, Tag};
+use horizon_client::mod_api::{Host, NativeServerPlayer, Tag};
 
 /// The key of the body saved while a selftest runs.
 const SNAPSHOT: &str = "chestcavity_selftest";
@@ -39,17 +39,22 @@ pub struct Run {
     fail: u32,
     info: u32,
     snapshot: Cavity,
+    /// The player's health when it started: losing the heart caps it, and it comes back at the end.
+    health: f32,
 }
 
 /// Starts a selftest for `uuid`, or says why not: a body that is not the normal one is refused unless `force`.
-pub fn start(host: &mut dyn Host, uuid: u128, body: &mut Body, force: bool) -> Result<Run, Msg> {
+/// The body it starts with must be saved first: without that a game that stops halfway would keep the test's.
+pub fn start(host: &mut dyn Host, uuid: u128, body: &mut Body, force: bool, health: f32) -> Result<Run, Msg> {
     let altered = body.scores != body.normal || body.cavity.slots.len() != SLOTS || body.incompat > 0;
     if altered && !force {
         return Err(msg("chestcavity.selftest.refused"));
     }
-    save(host, uuid, Some(&body.cavity));
+    if !save(host, uuid, Some(&body.cavity)) {
+        return Err(msg("chestcavity.selftest.unsaved"));
+    }
     trace::line(&*host, format!("INFO selftest: start, {} bodies", cases(uuid).len()));
-    Ok(Run { cases: cases(uuid), stage: Stage::Case(0), applied: false, wait: 0, pass: 0, fail: 0, info: 0, snapshot: body.cavity.clone() })
+    Ok(Run { cases: cases(uuid), stage: Stage::Case(0), applied: false, wait: 0, pass: 0, fail: 0, info: 0, snapshot: body.cavity.clone(), health })
 }
 
 impl Run {
@@ -116,7 +121,8 @@ pub fn step(host: &mut dyn Host, uuid: u128, body: &mut Body, run: &mut Run, cfg
             }
             run.give(host, uuid, body, cavity);
             run.check(&*host, body.incompat == 1, format!("rejection: {} organ of another body counted", body.incompat));
-            body.show_rejection(host, uuid, cfg.rejection_rate);
+            // Long enough to outlast the wait before it is read, whatever the settings' rate.
+            body.show_rejection(host, uuid, cfg.rejection_rate.max(100.0));
         }
         Stage::Rejection => {
             match host.effects(uuid) {
@@ -153,6 +159,9 @@ pub fn step(host: &mut dyn Host, uuid: u128, body: &mut Body, run: &mut Run, cfg
 /// The selftest is over: the body it started with is back, and the chat has the counts.
 fn finish(host: &mut dyn Host, uuid: u128, body: &mut Body, run: &Run) {
     put_back(host, uuid, body, run.snapshot.clone());
+    if run.health > 0.0 {
+        host.set_player_status(uuid, Some(run.health.min(body.max_health())), None, None);
+    }
     trace::line(&*host, format!("INFO selftest: end, {} PASS, {} FAIL, {} INFO", run.pass, run.fail, run.info));
     host.tell(uuid, msg("chestcavity.selftest.result").plain_arg(run.pass).plain_arg(run.fail).plain_arg(run.info).text());
 }
@@ -171,12 +180,17 @@ fn put_back(host: &mut dyn Host, uuid: u128, body: &mut Body, cavity: Cavity) {
     save(host, uuid, None);
 }
 
-/// The body a selftest that never ended left saved, taken away: the one to load instead of the test's.
-pub fn left_over(host: &mut dyn Host, uuid: u128) -> Option<Cavity> {
+/// The body a selftest that never ended left saved: the one to load instead of the test's. It stays saved until the
+/// body has been saved as the player's again (`forget`).
+pub fn left_over(host: &dyn Host, uuid: u128) -> Option<Cavity> {
     let cavity = saved(host, uuid, SNAPSHOT)?;
-    save(host, uuid, None);
-    trace::line(&*host, "INFO selftest: the body from before an unfinished selftest is back");
+    trace::line(host, "INFO selftest: the body from before an unfinished selftest is back");
     Some(cavity)
+}
+
+/// The body saved before a selftest is no longer needed.
+pub fn forget(host: &mut dyn Host, uuid: u128) {
+    save(host, uuid, None);
 }
 
 /// The cavity saved under `key` in the player's persistent data.
@@ -187,27 +201,41 @@ fn saved(host: &dyn Host, uuid: u128, key: &str) -> Option<Cavity> {
     }
 }
 
-/// Saves the body to put back (`Some`) or forgets it (`None`).
-fn save(host: &mut dyn Host, uuid: u128, cavity: Option<&Cavity>) {
+/// Saves the body to put back (`Some`) or forgets it (`None`); whether the game kept it.
+fn save(host: &mut dyn Host, uuid: u128, cavity: Option<&Cavity>) -> bool {
     let mut data = host.player_persistent_data(uuid).unwrap_or_else(|| Tag::compound(Vec::<(&str, Tag)>::new()));
-    let Tag::Compound(map) = &mut data else { return };
+    let Tag::Compound(map) = &mut data else { return false };
     match cavity {
         Some(c) => {
             map.insert(SNAPSHOT.into(), Tag::String(c.to_text().as_str().into()));
         }
         None => {
             if map.remove(&SNAPSHOT.into()).is_none() {
-                return;
+                return true;
             }
         }
     }
-    host.set_player_persistent_data(uuid, data);
+    host.set_player_persistent_data(uuid, data)
 }
 
 impl crate::ChestCavity {
+    /// A `/cc` command while a selftest may run: waits while one does, starts one for `/cc selftest [force]`. Whether
+    /// the command was answered here.
+    pub(crate) fn selftest_perform(&self, host: &mut dyn Host, player: &NativeServerPlayer, sub: Option<&str>, arg: Option<&str>) -> bool {
+        if crate::lock(&self.selftests).contains_key(&player.uuid) {
+            host.tell(player.uuid, msg("chestcavity.selftest.busy").text());
+            return true;
+        }
+        if sub != Some("selftest") {
+            return false;
+        }
+        self.selftest_command(host, player.uuid, arg == Some("true"), player.health);
+        true
+    }
+
     /// `/cc selftest [force]` from `uuid`: starts it, or says why not.
-    pub(crate) fn selftest_command(&self, host: &mut dyn Host, uuid: u128, force: bool) {
-        let started = self.with(host, uuid, |body, host| start(host, uuid, body, force));
+    pub(crate) fn selftest_command(&self, host: &mut dyn Host, uuid: u128, force: bool, health: f32) {
+        let started = self.with(host, uuid, |body, host| start(host, uuid, body, force, health));
         let line = match started {
             Ok(run) => {
                 crate::lock(&self.selftests).insert(uuid, run);

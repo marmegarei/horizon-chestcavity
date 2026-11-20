@@ -208,6 +208,8 @@
   "chestcavity.selftest.busy": "Está a correr um selftest: espera que acabe",
   "chestcavity.selftest.refused": "A tua cavidade torácica não é a normal: primeiro /cc reset, ou /cc selftest true",
   "chestcavity.selftest.result": "Selftest: %s PASS, %s FAIL, %s INFO (detalhes em chestcavity-trace.log)",
+  "chestcavity.msg.op_only": "Só os operadores podem usar isto",
+  "chestcavity.selftest.unsaved": "Não consegui guardar a tua cavidade torácica antes: o selftest não começou",
   "chestcavity.fmt.value": "%1$s: %2$s",
   "chestcavity.fmt.said": "%1$s %2$s: %3$s",
   "chestcavity.fmt.ability": "%1$s: %2$s%3$s",
