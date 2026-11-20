@@ -255,3 +255,15 @@ fn an_organ_with_its_owner_in_the_hand_goes_back_in_with_cc_put() {
     assert_eq!(body.cavity.slots[i].as_ref().map(|s| s.id.as_str()), Some("chestcavity:heart"));
     assert_eq!(game.base("minecraft:max_health"), 20.0);
 }
+
+#[test]
+fn a_full_reset_takes_a_grown_chest_back_to_three_rows() {
+    let mut game = Fake::new();
+    let mut body = Body::load(&mut game, ME);
+    assert!(body.grow(&mut game, ME));
+    body.reset(&mut game, ME);
+    assert_eq!(body.cavity.slots.len(), chestcavity_shared::cavity::GROWN, "a plain reset keeps the fourth row");
+    body.cavity = body.cavity.clone().resized(SLOTS);
+    body.reset(&mut game, ME);
+    assert_eq!(body.cavity.slots.len(), SLOTS);
+}

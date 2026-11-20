@@ -207,7 +207,7 @@ impl Hooks for ChestCavity {
         for usage in ["cc", "cc show", "cc list", "cc take <slot:integer>", "cc put", "cc ability <name:word>"] {
             event.commands.push(NativeCommand::new(usage));
         }
-        for usage in ["cc open", "cc reset", "cc selftest", "cc selftest <force:boolean>"] {
+        for usage in ["cc open", "cc reset", "cc reset full", "cc selftest", "cc selftest <force:boolean>"] {
             event.commands.push(NativeCommand::op(usage, 2));
         }
     }
@@ -240,6 +240,10 @@ impl Hooks for ChestCavity {
             None | Some("show") => vec![body.summary()],
             Some("list") => screen::list(&body.cavity),
             Some("reset") => {
+                // `full` also takes a grown chest back to its three rows (to test the dragon egg again).
+                if arg == Some("full") {
+                    body.cavity = body.cavity.clone().resized(chestcavity_shared::cavity::SLOTS);
+                }
                 body.reset(host, uuid);
                 vec![msg("chestcavity.msg.reset").text()]
             }

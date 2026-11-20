@@ -12,7 +12,8 @@ wait-until state -- player.block_pos.1 == 101 10
 command "give @s chestcavity:chest_opener"
 wait-until inventory -- counts.chestcavity:chest_opener == 1 10
 select chestcavity:chest_opener
-note "A primeira expansão exige uma cavidade de 27 slots. O cc reset preserva o tamanho atual."
+# O cc reset preserva a 4.ª fila; o cc reset full volta aos 27 slots, para o ovo poder aumentar o peito outra vez.
+command "cc reset full"
 mark
 command "cc list"
 wait-chat "27. " 10
