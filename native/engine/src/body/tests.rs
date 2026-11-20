@@ -239,3 +239,19 @@ fn a_cluttered_chest_is_tidied_when_opened_and_the_tidying_is_saved() {
     assert_eq!(game.menu.as_ref().expect("a menu")[4].as_ref().map(|s| &*s.item), Some("chestcavity:heart"), "and it is shown there");
     assert!(Body::load(&mut game, ME).cavity.slots[6].is_none(), "saved");
 }
+
+#[test]
+fn an_organ_with_its_owner_in_the_hand_goes_back_in_with_cc_put() {
+    let mut game = Fake::new();
+    let mut body = Body::load(&mut game, ME);
+    let i = heart_slot(&body);
+    body.take_out(&mut game, ME, i);
+    let held = game.inventory[0].clone().expect("the heart came out");
+    assert!(crate::screen::owner_of(&held).is_some(), "it knows the body it came from: not a plain item");
+    assert_eq!(game.take_items("chestcavity:heart", 1), 0, "the game takes only plain items by id");
+
+    body.put_held(&mut game, ME);
+    assert_eq!(game.inventory[0], None, "taken from its slot");
+    assert_eq!(body.cavity.slots[i].as_ref().map(|s| s.id.as_str()), Some("chestcavity:heart"));
+    assert_eq!(game.base("minecraft:max_health"), 20.0);
+}

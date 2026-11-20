@@ -138,13 +138,13 @@ fn a_click_on_a_mob_is_not_taken_for_your_own_chest() {
 
 #[test]
 fn an_organ_tells_what_it_is_good_at_in_its_tooltip_and_other_items_say_nothing() {
-    let heart = ChestCavity::tooltip_lines(&crate::screen::stack("chestcavity:heart", 1));
+    let heart = crate::screen::tooltip_lines(&crate::screen::stack("chestcavity:heart", 1));
     assert!(heart.iter().any(|l| l.plain().starts_with("Max health: +")), "{:?}", heart.iter().map(Text::plain).collect::<Vec<_>>());
     assert!(heart.iter().any(|l| l.plain().contains("without a heart you bleed")));
-    assert!(ChestCavity::tooltip_lines(&crate::screen::stack("minecraft:stick", 1)).is_empty());
+    assert!(crate::screen::tooltip_lines(&crate::screen::stack("minecraft:stick", 1)).is_empty());
     // An organ says whether it fits any body or only the one it came from.
     let said = |lines: Vec<Text>| lines.last().map(Text::plain);
     assert_eq!(said(heart), Some("Safe to use".to_string()));
-    let bound = ChestCavity::tooltip_lines(&crate::screen::organ_stack("chestcavity:heart", 1, Some(7)));
+    let bound = crate::screen::tooltip_lines(&crate::screen::organ_stack("chestcavity:heart", 1, Some(7)));
     assert_eq!(said(bound), Some("Only fits the body it was taken from".to_string()));
 }

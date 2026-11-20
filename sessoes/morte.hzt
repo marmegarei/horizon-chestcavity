@@ -30,6 +30,8 @@ wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
 close
 wait-until state -- screen == playing 10
 select chestcavity:rotten_heart
+# O servidor só vê a mão nova um tick depois do select.
+wait 10
 command "cc put"
 wait-until inventory -- counts.chestcavity:rotten_heart !exists 10
 command "cc open"
@@ -65,6 +67,8 @@ wait-until inventory -- counts.chestcavity:rotten_heart == 1 10
 close
 wait-until state -- screen == playing 10
 select chestcavity:rotten_heart
+# O servidor só vê a mão nova um tick depois do select.
+wait 10
 command "cc put"
 wait-until inventory -- counts.chestcavity:rotten_heart !exists 10
 command "cc open"

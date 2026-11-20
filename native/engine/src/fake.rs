@@ -134,10 +134,11 @@ impl Host for Fake {
         // The main hand of the double is hotbar slot 0.
         self.inventory[0].clone()
     }
+    /// Plain stacks only, as the game: an organ with its owner in its data is not one.
     fn take_items(&mut self, item: &str, count: u32) -> u32 {
         let mut taken = 0;
         for slot in self.inventory.iter_mut() {
-            let Some(s) = slot.as_mut().filter(|s| &*s.item == item) else { continue };
+            let Some(s) = slot.as_mut().filter(|s| &*s.item == item && crate::screen::owner_of(s).is_none()) else { continue };
             let n = s.count.min(count - taken);
             s.count -= n;
             taken += n;

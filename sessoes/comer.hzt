@@ -34,6 +34,8 @@ use-item --hold 2
 wait-until inventory -- counts.minecraft:bread !exists 10
 wait 8
 select chestcavity:stomach
+# O servidor só vê a mão nova um tick depois do select.
+wait 10
 command "cc put"
 wait-until inventory -- counts.chestcavity:stomach !exists 10
 command "gamerule natural_health_regeneration true"

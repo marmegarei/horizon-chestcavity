@@ -1,8 +1,9 @@
 //! The chest screen, for any cavity (a player's or a mob's): its slots as a chest, 27 or 36. Click an organ to take it
 //! out into the player's inventory, an organ of the player's below to put it in. The functions change a
 //! `Cavity` and the player's inventory only; whoever owns the cavity saves it when `changed` says so.
-use crate::texts::{Msg, item_name, msg};
+use crate::texts::{Msg, arg_text, item_name, msg};
 use chestcavity_shared::cavity::{Cavity, Slot, organ};
+use chestcavity_shared::describe::{IDLE, Tone, describe};
 use chestcavity_shared::layout;
 use horizon_client::mod_api::{Host, ItemStack, Tag, Text};
 
@@ -119,5 +120,28 @@ pub fn list(cavity: &Cavity) -> Vec<Text> {
                 None => head.append(msg("chestcavity.list.empty").text()),
             }
         })
+        .collect()
+}
+
+/// The lines an organ adds to its tooltip, coloured: green what it improves, red what it costs, purple its
+/// abilities, gold what happens without it. None for an item that is not an organ.
+pub fn tooltip_lines(stack: &ItemStack) -> Vec<Text> {
+    let Some(organ) = organ(&stack.item) else { return Vec::new() };
+    let fit = chestcavity_shared::cavity::is_true_organ(&stack.item).then(|| {
+        if owner_of(stack).is_some() { msg("chestcavity.compat.bound").text().with_color(0xFFAA00) } else { msg("chestcavity.compat.safe").text().with_color(0x55FF55) }
+    });
+    describe(organ)
+        .into_iter()
+        .map(|line| {
+            let color = match line.tone {
+                Tone::Better => 0x55FF55,
+                Tone::Worse => 0xFF5555,
+                Tone::Ability => 0xFF55FF,
+                Tone::Note => 0xFFAA00,
+            };
+            let idle = if line.idle { Text::translate_with_fallback(IDLE.0, IDLE.1, &[]).with_color(0x555555) } else { Text::empty() };
+            arg_text(&line.text).with_color(color).append(idle)
+        })
+        .chain(fit)
         .collect()
 }

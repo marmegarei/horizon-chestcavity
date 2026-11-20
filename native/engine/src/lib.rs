@@ -27,9 +27,7 @@ mod texts;
 mod trace;
 
 use body::Body;
-use chestcavity_shared::cavity::organ;
 use chestcavity_shared::config::Config;
-use chestcavity_shared::describe::{IDLE, Tone, describe};
 use chestcavity_shared::drops::Rng;
 use chestcavity_shared::food::Meal;
 use horizon_client::mod_api::{
@@ -41,7 +39,7 @@ use horizon_client::mod_api::{
 use combat::Hit;
 use mobbody::MobBody;
 use opening::{Ask, Player};
-use texts::{arg_text, msg};
+use texts::msg;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -84,6 +82,8 @@ struct ChestCavity {
     /// The mobs whose cavity has been changed, by entity id (see `mobbody`).
     mobs: Mutex<HashMap<u32, MobBody>>,
     rng: Mutex<Rng>,
+    /// The players whose `/cc put` waits for the server tick (see `Body::put_held`).
+    puts: Mutex<Vec<u128>>,
     /// The selftests running, by player (see `selftest`).
     selftests: Mutex<HashMap<u128, selftest::Run>>,
 }
@@ -117,6 +117,7 @@ impl ChestCavity {
             mob_screens: Mutex::new(HashMap::new()),
             mobs: Mutex::new(HashMap::new()),
             rng: Mutex::new(Rng(seed | 1)),
+            puts: Mutex::new(Vec::new()),
             selftests: Mutex::new(HashMap::new()),
         }
     }
@@ -176,29 +177,6 @@ impl ChestCavity {
         if let Some(line) = line {
             host.action_bar(uuid, line.text());
         }
-    }
-
-    /// The lines an organ adds to its tooltip, coloured: green what it improves, red what it costs, purple its
-    /// abilities, gold what happens without it. None for an item that is not an organ.
-    fn tooltip_lines(stack: &ItemStack) -> Vec<Text> {
-        let Some(organ) = organ(&stack.item) else { return Vec::new() };
-        let fit = chestcavity_shared::cavity::is_true_organ(&stack.item).then(|| {
-            if screen::owner_of(stack).is_some() { msg("chestcavity.compat.bound").text().with_color(0xFFAA00) } else { msg("chestcavity.compat.safe").text().with_color(0x55FF55) }
-        });
-        describe(organ)
-            .into_iter()
-            .map(|line| {
-                let color = match line.tone {
-                    Tone::Better => 0x55FF55,
-                    Tone::Worse => 0xFF5555,
-                    Tone::Ability => 0xFF55FF,
-                    Tone::Note => 0xFFAA00,
-                };
-                let idle = if line.idle { Text::translate_with_fallback(IDLE.0, IDLE.1, &[]).with_color(0x555555) } else { Text::empty() };
-                arg_text(&line.text).with_color(color).append(idle)
-            })
-            .chain(fit)
-            .collect()
     }
 
     /// The Chest Opener used by the acting player: their own chest cavity, at the next server tick.
@@ -270,7 +248,10 @@ impl Hooks for ChestCavity {
                 Some(n) => vec![body.take_out(host, uuid, n - 1).unwrap_or_else(|| msg("chestcavity.msg.took").plain_arg(n)).text()],
                 None => vec![msg("chestcavity.msg.take_usage").plain_arg(body.cavity.slots.len()).text()],
             },
-            Some("put") => vec![body.put_held(host, uuid).text()],
+            Some("put") => {
+                lock(&self.puts).push(uuid);
+                Vec::new()
+            }
             Some(other) => vec![msg("chestcavity.msg.unknown_sub").plain_arg(other).text()],
         });
         for line in lines {
@@ -323,6 +304,7 @@ impl Hooks for ChestCavity {
         self.open_queued(host);
         self.spend_eggs(host);
         self.run_abilities(host);
+        self.run_puts(host);
         self.run_combat(host);
     }
 
@@ -491,7 +473,7 @@ impl Hooks for ChestCavity {
 
     /// What an organ is good and bad at, under its name wherever the game shows its tooltip.
     fn tooltip(&self, _host: &dyn Host, event: &mut TooltipEvent<'_>) {
-        for line in Self::tooltip_lines(event.stack) {
+        for line in screen::tooltip_lines(event.stack) {
             event.lines.push((line, u32::MAX));
         }
     }

@@ -247,11 +247,14 @@ impl Body {
         let click = screen::put_in(host, &mut self.cavity, held, remove);
         self.settle(host, uuid, click)
     }
-    /// Puts the organ in the player's main hand in; what to tell them.
+    /// Puts the organ in the player's main hand in; what to tell them. An organ taken out of a body carries its owner,
+    /// so it is not a plain item (`take_items` would not see it): the exact stack is taken from its slot, which the game
+    /// lists at the server tick only (`ChestCavity::run_puts`).
     pub fn put_held(&mut self, host: &mut dyn Host, uuid: u128) -> Msg {
         let Some(held) = host.held_stack(uuid) else { return msg("chestcavity.msg.no_held") };
         let name = organ(&held.item).map_or_else(|| Text::literal(held.item.to_string()), |o| item_name(o.id, o.name));
-        self.put_in(host, uuid, held.clone(), |host, h| host.take_items(&h.item, h.count) == h.count)
+        let slot = host.player_stacks(uuid).and_then(|stacks| stacks.iter().position(|s| s.as_ref() == Some(&held)));
+        self.put_in(host, uuid, held.clone(), |host, h| slot.is_some_and(|i| host.take_stacks(uuid, &[(i, h.clone())]).is_ok()))
             .unwrap_or_else(|| msg("chestcavity.msg.put").arg(name))
     }
 
@@ -309,6 +312,17 @@ impl Body {
                     teleport::randomly(host, who, f64::from(range), rng);
                 }
             }
+        }
+    }
+}
+
+impl crate::ChestCavity {
+    /// The `/cc put`s asked for, at the server tick.
+    pub(crate) fn run_puts(&self, host: &mut dyn Host) {
+        let asked = std::mem::take(&mut *crate::lock(&self.puts));
+        for uuid in asked {
+            let line = self.with(host, uuid, |body, host| body.put_held(host, uuid));
+            host.tell(uuid, line.text());
         }
     }
 }
